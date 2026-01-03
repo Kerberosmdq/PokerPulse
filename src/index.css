@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #050505;
+  --color-surface: #121212;
+  --color-primary: #00ff9d;
+  --color-secondary: #00d4ff;
+  --color-accent: #ff0055;
+  --color-surface-light: #1e1e1e;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(circle at 50% 0%, #1a1a1a 0%, transparent 70%),
+    radial-gradient(circle at 80% 10%, rgba(0, 255, 157, 0.05) 0%, transparent 30%),
+    radial-gradient(circle at 20% 90%, rgba(0, 212, 255, 0.05) 0%, transparent 30%);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff9d;
+  box-shadow: 0 0 10px #00ff9d;
+}
+
+/* Global Utilities */
+.glass-panel {
+  background: rgba(18, 18, 18, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.neon-text {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.neon-border {
+  box-shadow: 0 0 5px #00ff9d;
+}
