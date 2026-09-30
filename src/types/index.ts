@@ -4,11 +4,16 @@ export interface Player {
     id: string;
     name: string;
     chips: number;
-    buyInAmount: number; // Track actual money invested
+    buyInAmount: number; // Dinero de la entrada inicial
+    rebuyTotal: number; // Dinero acumulado en re-entradas
+    addonTotal: number; // Dinero acumulado en add-ons
     status: PlayerStatus;
     rebuys: number;
     addons: number;
     buyInTime: number;
+    bustedAt?: number; // Momento de la eliminación (define el orden de salida)
+    table?: number; // Mesa asignada en el sorteo (1..n)
+    seat?: number; // Asiento asignado en el sorteo (1..n)
 }
 
 export interface BlindLevel {
@@ -17,11 +22,11 @@ export interface BlindLevel {
     smallBlind: number;
     bigBlind: number;
     ante: number;
-    duration: number; // in minutes
+    duration: number; // en minutos
 }
 
 export interface ChipValue {
-    color: string; // hex code or name
+    color: string;
     value: number;
 }
 
@@ -34,38 +39,83 @@ export interface GameLogEntry {
 
 export type GameState = 'landing' | 'setup' | 'active' | 'paused' | 'finished';
 
-export interface PokerGameStore {
+export type ThemeId = 'cyberpunk' | 'montecarlo' | 'vegas' | 'royal';
+
+export type PayoutStructure = 'winner-takes-all' | 'heads-up' | 'top-3' | 'custom';
+
+export interface TournamentSettings {
+    tournamentName: string;
+    buyIn: number;
+    startingStack: number;
+    rebuyAmount: number;
+    rebuyChips: number;
+    addonAmount: number;
+    addonChips: number;
+    seatsPerTable: number;
+}
+
+export interface TournamentHistoryEntry {
+    id: string;
+    timestamp?: number; // Registros viejos solo tienen `date`
+    date: string;
+    name?: string;
+    prizePool: number;
+    totalPlayers: number;
+    rebuysCount: number;
+    addonsCount: number;
+    durationMinutes?: number;
+    winners: { name: string; prize: number; position: number }[];
+}
+
+export interface PokerGameStore extends TournamentSettings {
     gameState: GameState;
     players: Player[];
     blindsStructure: BlindLevel[];
     chipValues: ChipValue[];
     currentLevelIndex: number;
     timerSecondsRemaining: number;
+    levelEndTime: number | null;
     isPaused: boolean;
+    tournamentStartedAt: number | null;
     prizePool: number;
-    payoutStructure: string;
+    payoutStructure: PayoutStructure;
     gameLog: GameLogEntry[];
     playerHistory: string[];
+    theme: ThemeId;
+    volume: number;
+    isMuted: boolean;
+    voiceEnabled: boolean;
+    customPayouts: number[];
 
     // Actions
     setGameState: (state: GameState) => void;
-    setPayoutStructure: (structure: string) => void;
+    setTheme: (theme: ThemeId) => void;
+    setPayoutStructure: (structure: PayoutStructure) => void;
+    setTournamentSettings: (settings: Partial<TournamentSettings>) => void;
     addPlayer: (name: string, initialStack?: number, buyIn?: number) => void;
     updatePlayer: (id: string, updates: Partial<Player>) => void;
     deletePlayer: (id: string) => void;
     rebuyPlayer: (id: string, cost?: number, chips?: number) => void;
     addonPlayer: (id: string, cost?: number, chips?: number) => void;
     bustPlayer: (id: string) => void;
+    restorePlayer: (id: string, chips: number) => void;
+    toggleAway: (id: string) => void;
+    assignSeats: (seats: { id: string; table: number; seat: number }[]) => void;
     setBlindsStructure: (levels: BlindLevel[]) => void;
     setChipValues: (chips: ChipValue[]) => void;
     startTimer: () => void;
     pauseTimer: () => void;
     resetTimer: () => void;
+    adjustTimer: (seconds: number) => void;
     tickTimer: () => void;
     nextLevel: () => void;
     prevLevel: () => void;
     logAction: (action: GameLogEntry['action'], description: string) => void;
+    importState: (data: Partial<PokerGameStore>) => void;
     resetGame: () => void;
-    endGame: () => void;
     clearPlayerHistory: () => void;
+    setVolume: (volume: number) => void;
+    toggleMute: () => void;
+    toggleVoice: () => void;
+    setCustomPayouts: (payouts: number[]) => void;
 }

@@ -1,64 +1,154 @@
-@import "tailwindcss";
+/* Solo escanear clases en src/ (no en docs ni agent-skills) */
+@import "tailwindcss" source(".");
 
+/*
+ * Tokens de color. Tailwind genera utilidades (bg-primary, text-accent, ...) que leen estas
+ * variables; cada tema (.theme-*) las redefine y todo lo que cuelga de él cambia de color.
+ */
 @theme {
   --color-background: #050505;
   --color-surface: #121212;
+  --color-surface-light: #1e1e1e;
   --color-primary: #00ff9d;
   --color-secondary: #00d4ff;
   --color-accent: #ff0055;
-  --color-surface-light: #1e1e1e;
+  --color-warning: #facc15;
 
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
 :root {
   color-scheme: dark;
 }
 
+.theme-cyberpunk {
+  --color-background: #050505;
+  --color-surface: #121212;
+  --color-surface-light: #1e1e1e;
+  --color-primary: #00ff9d;
+  --color-secondary: #00d4ff;
+  --color-accent: #ff0055;
+}
+
+.theme-montecarlo {
+  --color-background: #0a0907;
+  --color-surface: #15120c;
+  --color-surface-light: #241f15;
+  --color-primary: #d4af37;
+  --color-secondary: #f3e5ab;
+  --color-accent: #e0703a;
+}
+
+.theme-vegas {
+  --color-background: #040c06;
+  --color-surface: #0a1b0e;
+  --color-surface-light: #133019;
+  --color-primary: #22c55e;
+  --color-secondary: #f4f4f5;
+  --color-accent: #ef4444;
+}
+
+.theme-royal {
+  --color-background: #050714;
+  --color-surface: #0c0f24;
+  --color-surface-light: #181d40;
+  --color-primary: #60a5fa;
+  --color-secondary: #cbd5e1;
+  --color-accent: #f59e0b;
+}
+
+html,
 body {
   background-color: var(--color-background);
-  background-image:
-    radial-gradient(circle at 50% 0%, #1a1a1a 0%, transparent 70%),
-    radial-gradient(circle at 80% 10%, rgba(0, 255, 157, 0.05) 0%, transparent 30%),
-    radial-gradient(circle at 20% 90%, rgba(0, 212, 255, 0.05) 0%, transparent 30%);
+}
+
+body {
   color: #ffffff;
   font-family: var(--font-sans);
   overflow-x: hidden;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Custom Scrollbar */
+/* Sombras luminosas que respetan el tema activo */
+@utility glow-primary {
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-primary) 40%, transparent);
+}
+
+@utility glow-secondary {
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-secondary) 40%, transparent);
+}
+
+@utility glow-accent {
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 24px color-mix(in oklab, var(--color-primary) 45%, transparent);
+}
+
+@utility text-glow-white {
+  text-shadow: 0 0 22px rgba(255, 255, 255, 0.35);
+}
+
+@utility glass-panel {
+  background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-light) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #050505;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e1e1e;
+  background: var(--color-surface-light);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00ff9d;
-  box-shadow: 0 0 10px #00ff9d;
+  background: color-mix(in oklab, var(--color-primary) 60%, transparent);
 }
 
-/* Global Utilities */
-.glass-panel {
-  background: rgba(18, 18, 18, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+/* Inputs numéricos sin flechitas (se editan escribiendo) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-.neon-text {
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-.neon-border {
-  box-shadow: 0 0 5px #00ff9d;
+select option {
+  background: var(--color-surface);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

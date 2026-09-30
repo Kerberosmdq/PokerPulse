@@ -8,26 +8,23 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo.png'],
+      includeAssets: ['logo.svg', 'icon-192.png', 'icon-512.png'],
+      // Incluir las fuentes en la caché: la app tiene que funcionar sin internet
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png}', '**/*latin*.woff2'], globIgnores: ['**/logo.png'] },
       manifest: {
-        name: 'PokerPulse',
-        short_name: 'PokerPulse',
-        description: 'Professional Poker Tournament Manager',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        name: 'NexPulse',
+        short_name: 'NexPulse',
+        description: 'Reloj de ciegas y gestor de torneos de póker',
+        lang: 'es',
+        theme_color: '#050505',
+        background_color: '#050505',
         display: 'standalone',
-        orientation: 'landscape',
+        start_url: '/',
+        // Sin orientación fija: el control remoto se usa en el celular en vertical
         icons: [
-          {
-            src: 'logo.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'logo.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
+          { src: 'logo.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ]
       }
     })

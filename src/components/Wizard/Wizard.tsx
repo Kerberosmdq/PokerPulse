@@ -1,100 +1,138 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, ChevronLeft, Play, Check } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
+import { Logo } from '../ui/Logo';
+import { cn } from '../../utils/cn';
+import { validateBlindsStructure } from '../../utils/tournament';
+import { TournamentConfig } from './TournamentConfig';
 import { BlindsConfig } from './BlindsConfig';
 import { ChipsConfig } from './ChipsConfig';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronLeft, Play } from 'lucide-react';
+import { PlayersSetup } from './PlayersSetup';
+
+const STEPS = [
+    { id: 'tournament', label: 'Torneo' },
+    { id: 'blinds', label: 'Ciegas' },
+    { id: 'chips', label: 'Fichas' },
+    { id: 'players', label: 'Jugadores' },
+] as const;
 
 export const Wizard: React.FC = () => {
-    const [step, setStep] = useState(1);
-    const { setGameState } = useGameStore();
+    const [step, setStep] = useState(0);
+    const [validationError, setValidationError] = useState('');
+    const blindsStructure = useGameStore(s => s.blindsStructure);
+    // Si ya hay un torneo en marcha, el asistente funciona como "editar configuración"
+    const inProgress = useGameStore(s => s.tournamentStartedAt !== null);
+    const { setGameState } = useGameStore.getState();
 
-    const handleNext = () => {
-        if (step < 2) setStep(step + 1);
-        else handleStartGame();
+    const canLeaveStep = (from: number) => {
+        if (STEPS[from].id === 'blinds') {
+            const errors = validateBlindsStructure(blindsStructure);
+            if (errors.length > 0) {
+                setValidationError(errors[0]);
+                return false;
+            }
+        }
+        setValidationError('');
+        return true;
     };
 
-    const handleBack = () => {
-        if (step > 1) setStep(step - 1);
-        else setGameState('landing');
+    const goTo = (target: number) => {
+        if (target === step) return;
+        if (target > step && !canLeaveStep(step)) return;
+        setStep(target);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleStartGame = () => {
+    const finish = () => {
+        if (!canLeaveStep(step)) return;
+        const errors = validateBlindsStructure(blindsStructure);
+        if (errors.length > 0) {
+            setStep(1);
+            setValidationError(errors[0]);
+            return;
+        }
         setGameState('active');
-        // startTimer(); // Optional: start immediately or wait for user
     };
+
+    const isLast = step === STEPS.length - 1;
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Decor */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[100px]" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/10 rounded-full blur-[100px]" />
-            </div>
-
-            <div className="w-full max-w-5xl relative z-10">
-                <div className="text-center space-y-4 mb-12 flex flex-col items-center">
-                    <img src="/logo.png?v=5" alt="PokerPulse Logo" className="w-32 h-32 object-contain drop-shadow-[0_0_15px_rgba(0,255,157,0.5)] mb-4" />
-                    <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-white to-secondary drop-shadow-[0_0_15px_rgba(0,255,157,0.5)] tracking-tighter">
-                        POKERPULSE
-                    </h1>
-                    <p className="text-gray-400 text-lg tracking-widest uppercase">Configuración del Torneo</p>
+        <div className="min-h-screen flex justify-center px-4 py-8 md:py-12">
+            <div className="w-full max-w-5xl">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                        <Logo className="w-12 h-12" />
+                        <div>
+                            <div className="font-black text-2xl tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-primary via-white to-secondary">NEXPULSE</div>
+                            <div className="text-[11px] text-gray-500 uppercase tracking-[0.25em]">{inProgress ? 'Editar configuración' : 'Nuevo torneo'}</div>
+                        </div>
+                    </div>
+                    {inProgress && (
+                        <Button variant="outline" size="sm" onClick={finish}>Volver al torneo</Button>
+                    )}
                 </div>
 
-                <div className="glass-panel rounded-2xl p-8 md:p-12 backdrop-blur-xl border border-white/10 shadow-2xl">
-                    {/* Stepper */}
-                    <div className="flex justify-center gap-4 mb-12">
-                        {[1, 2].map((i) => (
-                            <div key={i} className="flex flex-col items-center gap-2">
-                                <div
-                                    className={`h-1 w-24 rounded-full transition-all duration-500 ${step >= i
-                                        ? 'bg-gradient-to-r from-primary to-secondary shadow-[0_0_10px_rgba(0,255,157,0.5)]'
-                                        : 'bg-white/10'
-                                        }`}
-                                />
-                                <span className={`text-xs uppercase tracking-wider font-bold ${step >= i ? 'text-white' : 'text-gray-600'}`}>
-                                    {i === 1 ? 'Ciegas' : 'Fichas'}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
+                {/* Pasos */}
+                <ol className="grid grid-cols-4 gap-2 mb-6" aria-label="Pasos">
+                    {STEPS.map((s, i) => (
+                        <li key={s.id}>
+                            <button
+                                onClick={() => goTo(i)}
+                                aria-current={i === step ? 'step' : undefined}
+                                className="w-full text-left group"
+                            >
+                                <div className={cn('h-1 rounded-full transition-all duration-500', i <= step ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-white/10 group-hover:bg-white/20')} />
+                                <div className={cn('mt-2 text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5', i === step ? 'text-white' : i < step ? 'text-primary' : 'text-gray-600 group-hover:text-gray-400')}>
+                                    {i < step ? <Check className="w-3 h-3" /> : <span className="font-mono">{i + 1}</span>}
+                                    {s.label}
+                                </div>
+                            </button>
+                        </li>
+                    ))}
+                </ol>
 
+                <div className="glass-panel rounded-3xl p-5 md:p-10 shadow-2xl">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={step}
-                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                            transition={{ duration: 0.4, ease: "easeOut" }}
-                            className="min-h-[400px]"
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            transition={{ duration: 0.25, ease: 'easeOut' }}
+                            className="min-h-[380px]"
                         >
-                            {step === 1 && <BlindsConfig />}
-                            {step === 2 && <ChipsConfig />}
+                            {STEPS[step].id === 'tournament' && <TournamentConfig />}
+                            {STEPS[step].id === 'blinds' && <BlindsConfig />}
+                            {STEPS[step].id === 'chips' && <ChipsConfig />}
+                            {STEPS[step].id === 'players' && <PlayersSetup />}
                         </motion.div>
                     </AnimatePresence>
 
-                    <div className="flex justify-between pt-8 mt-8 border-t border-white/10">
+                    {validationError && (
+                        <div className="bg-accent/10 border border-accent/30 p-3 rounded-lg mt-6" role="alert">
+                            <p className="text-sm text-accent font-bold">⚠️ {validationError}</p>
+                        </div>
+                    )}
+
+                    <div className="flex justify-between gap-3 pt-6 mt-8 border-t border-white/10">
                         <Button
                             variant="ghost"
-                            onClick={handleBack}
-                            className={`transition-opacity duration-300 ${step === 1 ? 'text-gray-500 hover:text-white' : 'opacity-100'}`}
+                            onClick={() => (step > 0 ? goTo(step - 1) : setGameState(inProgress ? 'active' : 'landing'))}
                         >
-                            <ChevronLeft className="w-5 h-5 mr-2" /> {step === 1 ? 'Inicio' : 'Atrás'}
+                            <ChevronLeft className="w-5 h-5" /> {step > 0 ? 'Atrás' : inProgress ? 'Volver' : 'Inicio'}
                         </Button>
 
-                        <Button
-                            onClick={handleNext}
-                            size="lg"
-                            variant={step === 2 ? 'primary' : 'neon'}
-                            className="w-48 shadow-lg"
-                        >
-                            {step === 2 ? (
-                                <>Comenzar <Play className="w-5 h-5 ml-2 fill-current" /></>
-                            ) : (
-                                <>Siguiente <ChevronRight className="w-5 h-5 ml-2" /></>
-                            )}
-                        </Button>
+                        {isLast ? (
+                            <Button onClick={finish} size="lg" className="glow-primary">
+                                {inProgress ? 'Guardar y volver' : 'Comenzar torneo'} <Play className="w-5 h-5 fill-current" />
+                            </Button>
+                        ) : (
+                            <Button onClick={() => goTo(step + 1)} size="lg" variant="neon">
+                                Siguiente <ChevronRight className="w-5 h-5" />
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1,42 +1,31 @@
 import React from 'react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-export function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
+import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'neon';
-    size?: 'sm' | 'md' | 'lg';
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'neon' | 'outline';
+    size?: 'sm' | 'md' | 'lg' | 'icon';
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = 'primary', size = 'md', ...props }, ref) => {
+    ({ className, variant = 'primary', size = 'md', type = 'button', ...props }, ref) => {
         return (
             <button
                 ref={ref}
+                type={type}
                 className={cn(
-                    'inline-flex items-center justify-center gap-2 rounded-md font-bold uppercase tracking-wider transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
+                    'inline-flex items-center justify-center gap-2 rounded-lg font-bold uppercase tracking-wider transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 active:scale-[0.97] select-none',
                     {
-                        // Primary: Neon Green Glow
-                        'bg-primary text-black hover:bg-primary/90 hover:shadow-[0_0_20px_rgba(0,255,157,0.6)]': variant === 'primary',
+                        'bg-primary text-black hover:brightness-110 hover:glow-primary': variant === 'primary',
+                        'bg-secondary text-black hover:brightness-110 hover:glow-secondary': variant === 'secondary',
+                        'bg-accent text-white hover:brightness-110 hover:glow-accent': variant === 'danger',
+                        'text-gray-300 hover:bg-white/10 hover:text-white': variant === 'ghost',
+                        'bg-transparent border border-primary text-primary hover:bg-primary hover:text-black hover:glow-primary': variant === 'neon',
+                        'bg-white/[0.03] border border-white/10 text-gray-200 hover:bg-white/10 hover:border-white/20 hover:text-white': variant === 'outline',
 
-                        // Secondary: Neon Blue Glow
-                        'bg-secondary text-black hover:bg-secondary/90 hover:shadow-[0_0_20px_rgba(0,212,255,0.6)]': variant === 'secondary',
-
-                        // Danger: Neon Red Glow
-                        'bg-accent text-white hover:bg-accent/90 hover:shadow-[0_0_20px_rgba(255,0,85,0.6)]': variant === 'danger',
-
-                        // Ghost: Subtle hover
-                        'hover:bg-white/10 text-gray-300 hover:text-white': variant === 'ghost',
-
-                        // Neon Outline
-                        'bg-transparent border border-primary text-primary hover:bg-primary hover:text-black hover:shadow-[0_0_20px_rgba(0,255,157,0.4)]': variant === 'neon',
-
-                        'h-9 px-4 py-2 text-xs': size === 'sm',
-                        'h-12 px-8 py-3 text-sm': size === 'md',
+                        'h-9 px-3.5 text-xs': size === 'sm',
+                        'h-11 px-6 text-sm': size === 'md',
                         'h-14 px-10 text-base': size === 'lg',
+                        'h-9 w-9 p-0': size === 'icon',
                     },
                     className
                 )}

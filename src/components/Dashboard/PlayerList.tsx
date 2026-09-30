@@ -1,278 +1,361 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2, Coffee, MoreVertical, Search, X, History } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
+import { toast } from '../../store/toastStore';
+import type { Player } from '../../types';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { NumberField } from '../ui/NumberField';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { cn } from '../../utils/cn';
+import { formatChips, formatMoney, getStandings, playerSpent } from '../../utils/tournament';
 
 export const PlayerList: React.FC = () => {
-    const { players, addPlayer, rebuyPlayer, addonPlayer, bustPlayer, deletePlayer, updatePlayer } = useGameStore();
-    const [newPlayerName, setNewPlayerName] = useState('');
-    const [initialStack, setInitialStack] = useState('1000');
-    const [buyInAmount, setBuyInAmount] = useState('100');
-    const [isAdding, setIsAdding] = useState(false);
+    const players = useGameStore(s => s.players);
+    const [isAdding, setIsAdding] = useState(players.length === 0);
+    const [query, setQuery] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [editName, setEditName] = useState('');
-    const [editStack, setEditStack] = useState('');
-    const [editBuyIn, setEditBuyIn] = useState('');
+    const [toDelete, setToDelete] = useState<Player | null>(null);
+    const { deletePlayer } = useGameStore.getState();
 
-    const handleAddPlayer = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newPlayerName.trim()) {
-            addPlayer(newPlayerName.trim(), parseInt(initialStack) || 1000, parseInt(buyInAmount) || 100);
-            setNewPlayerName('');
-            setIsAdding(false);
-        }
-    };
+    const standings = useMemo(() => getStandings(players), [players]);
+    const positionById = useMemo(() => new Map(standings.map(s => [s.player.id, s.position])), [standings]);
 
-    const startEditing = (player: any) => {
-        setEditingId(player.id);
-        setEditName(player.name);
-        setEditStack(player.chips.toString());
-        setEditBuyIn(player.buyInAmount.toString());
-    };
-
-    const saveEdit = () => {
-        if (editingId && editName.trim()) {
-            updatePlayer(editingId, {
-                name: editName.trim(),
-                chips: parseInt(editStack) || 0,
-                buyInAmount: parseInt(editBuyIn) || 0
-            });
-            setEditingId(null);
-        }
-    };
-
-    const activePlayers = players.filter(p => p.status !== 'busted');
-    const bustedPlayers = players.filter(p => p.status === 'busted');
+    const q = query.trim().toLowerCase();
+    const matches = (p: Player) => !q || p.name.toLowerCase().includes(q);
+    // En juego: orden de inscripción (estable, no "salta" al editar fichas)
+    const alivePlayers = players.filter(p => p.status !== 'busted' && matches(p));
+    const bustedPlayers = standings.map(s => s.player).filter(p => p.status === 'busted' && matches(p));
+    const aliveCount = players.filter(p => p.status !== 'busted').length;
 
     return (
-        <div className="space-y-4 h-full flex flex-col">
-            <div className="flex justify-between items-center">
-                <h3 className="text-gray-400 font-bold uppercase text-xs tracking-widest">Jugadores Activos ({activePlayers.length})</h3>
-                <Button size="sm" variant="ghost" onClick={() => setIsAdding(!isAdding)}>
-                    <UserPlus className="w-4 h-4" />
+        <div className="h-full flex flex-col gap-3 min-h-0">
+            <div className="flex justify-between items-center gap-2">
+                <h3 className="text-primary font-bold uppercase text-xs tracking-[0.2em] flex items-center gap-2">
+                    <span className="w-2 h-2 bg-primary rounded-full" /> Jugadores
+                    <span className="text-gray-500 tracking-normal font-mono normal-case">{aliveCount}/{players.length}</span>
+                </h3>
+                <Button size="sm" variant={isAdding ? 'outline' : 'neon'} onClick={() => setIsAdding(!isAdding)} className="h-8 px-2.5">
+                    {isAdding ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                    {isAdding ? 'Cerrar' : 'Agregar'}
                 </Button>
             </div>
 
-            <AnimatePresence>
-                {isAdding && (
-                    <motion.form
-                        initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
-                        animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
-                        exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
-                        onSubmit={handleAddPlayer}
-                        className="flex flex-col gap-2 bg-surface-light/50 p-3 rounded-lg border border-white/10"
-                    >
-                        <div className="flex gap-2">
-                            <Input
-                                value={newPlayerName}
-                                onChange={(e) => setNewPlayerName(e.target.value)}
-                                placeholder="Nombre del Jugador"
-                                autoFocus
-                                className="h-9 text-sm flex-1"
-                            />
-                            {/* Quick Add from History */}
-                            <HistoryDropdown onSelect={(name) => setNewPlayerName(name)} />
-                        </div>
-
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <label className="text-[10px] text-gray-500 uppercase tracking-wider ml-1">Fichas</label>
-                                <Input
-                                    type="number"
-                                    value={initialStack}
-                                    onChange={(e) => setInitialStack(e.target.value)}
-                                    placeholder="1000"
-                                    className="h-8 text-sm"
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-[10px] text-gray-500 uppercase tracking-wider ml-1">Entrada ($)</label>
-                                <Input
-                                    type="number"
-                                    value={buyInAmount}
-                                    onChange={(e) => setBuyInAmount(e.target.value)}
-                                    placeholder="100"
-                                    className="h-8 text-sm"
-                                />
-                            </div>
-                        </div>
-                        <Button type="submit" size="sm" variant="secondary" className="w-full h-8 mt-1">
-                            <Plus className="w-4 h-4 mr-2" /> Añadir Jugador
-                        </Button>
-                    </motion.form>
-                )}
+            <AnimatePresence initial={false}>
+                {isAdding && <AddPlayerForm />}
             </AnimatePresence>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                <AnimatePresence mode="popLayout">
-                    {activePlayers.map((player) => (
+            {players.length > 6 && (
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                    <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Buscar jugador..."
+                        aria-label="Buscar jugador"
+                        className="w-full h-9 bg-black/20 border border-white/5 rounded-lg pl-9 pr-3 text-sm focus:outline-none focus:border-primary/50"
+                    />
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 -mr-1 min-h-0">
+                {players.length === 0 && !isAdding && (
+                    <div className="text-center py-10 text-sm text-gray-500">
+                        Todavía no hay jugadores.
+                        <button onClick={() => setIsAdding(true)} className="block mx-auto mt-2 text-primary font-bold hover:underline">Agregar el primero</button>
+                    </div>
+                )}
+
+                <AnimatePresence initial={false}>
+                    {alivePlayers.map((player) => (
                         <motion.div
                             key={player.id}
-                            layout
-                            initial={{ opacity: 0, x: -20 }}
+                            layout="position"
+                            initial={{ opacity: 0, x: -12 }}
                             animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            className="bg-surface-light rounded p-3 group hover:bg-surface-light/80 transition-colors relative"
+                            exit={{ opacity: 0, x: 12 }}
                         >
-                            {editingId === player.id ? (
-                                <div className="space-y-2">
-                                    <Input
-                                        value={editName}
-                                        onChange={(e) => setEditName(e.target.value)}
-                                        className="h-8 text-sm"
-                                    />
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="number"
-                                            value={editStack}
-                                            onChange={(e) => setEditStack(e.target.value)}
-                                            className="h-8 text-sm"
-                                            placeholder="Fichas"
-                                        />
-                                        <Input
-                                            type="number"
-                                            value={editBuyIn}
-                                            onChange={(e) => setEditBuyIn(e.target.value)}
-                                            className="h-8 text-sm"
-                                            placeholder="$"
-                                        />
-                                    </div>
-                                    <div className="flex justify-end gap-2">
-                                        <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} className="h-7 text-xs">Cancelar</Button>
-                                        <Button size="sm" variant="primary" onClick={saveEdit} className="h-7 text-xs">Guardar</Button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="font-bold text-white flex items-center gap-2">
-                                            {player.name}
-                                            <button onClick={() => startEditing(player)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition-opacity">
-                                                <Pencil className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                        <div className="text-xs text-primary flex items-center gap-2">
-                                            <span>{player.chips.toLocaleString()}</span>
-                                            <span className="text-gray-500">(${player.buyInAmount})</span>
-                                            {player.rebuys > 0 && <span className="text-accent">+{player.rebuys}R</span>}
-                                            {player.addons > 0 && <span className="text-secondary">+{player.addons}A</span>}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => addonPlayer(player.id)}
-                                            title="Add-on"
-                                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => rebuyPlayer(player.id)}
-                                            title="Re-entrada"
-                                            className="h-8 w-8 p-0 text-secondary hover:text-secondary hover:bg-secondary/10"
-                                        >
-                                            <RefreshCcw className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => bustPlayer(player.id)}
-                                            title="Eliminar"
-                                            className="h-8 w-8 p-0 text-accent hover:text-accent hover:bg-accent/10"
-                                        >
-                                            <Skull className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => deletePlayer(player.id)}
-                                            title="Borrar"
-                                            className="h-8 w-8 p-0 text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                            {editingId === player.id
+                                ? <EditPlayerRow player={player} onDone={() => setEditingId(null)} />
+                                : <PlayerRow player={player} onEdit={() => setEditingId(player.id)} onDelete={() => setToDelete(player)} />}
                         </motion.div>
                     ))}
                 </AnimatePresence>
 
                 {bustedPlayers.length > 0 && (
-                    <div className="pt-4 border-t border-surface-light mt-4">
-                        <h3 className="text-gray-500 font-bold uppercase text-xs tracking-widest mb-2">Eliminados</h3>
-                        <div className="space-y-2 opacity-50">
+                    <div className="pt-3 mt-3 border-t border-white/5">
+                        <h4 className="text-gray-500 font-bold uppercase text-[10px] tracking-[0.2em] mb-2">Eliminados</h4>
+                        <div className="space-y-1">
                             {bustedPlayers.map(player => (
-                                <div key={player.id} className="flex justify-between text-sm px-2 group">
-                                    <span className="line-through text-gray-400">{player.name}</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-600">${player.buyInAmount + (player.rebuys * 100) + (player.addons * 100)}</span>
-                                        <button onClick={() => deletePlayer(player.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400">
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
+                                <div key={player.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-white/[0.03]">
+                                    <span className="font-mono text-[11px] text-gray-500 w-7 shrink-0">#{positionById.get(player.id)}</span>
+                                    <span className="text-gray-400 truncate flex-1">{player.name}</span>
+                                    <span className="text-gray-600 text-xs font-mono">{formatMoney(playerSpent(player))}</span>
+                                    <button
+                                        onClick={() => {
+                                            useGameStore.getState().rebuyPlayer(player.id);
+                                            toast.success(`Re-entrada de ${player.name}`);
+                                        }}
+                                        title="Re-entrada"
+                                        aria-label={`Re-entrada de ${player.name}`}
+                                        className="p-1.5 rounded-md text-secondary/70 hover:text-secondary hover:bg-secondary/10"
+                                    >
+                                        <RefreshCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={() => setToDelete(player)}
+                                        title="Borrar del torneo"
+                                        aria-label={`Borrar a ${player.name}`}
+                                        className="p-1.5 rounded-md text-gray-600 hover:text-accent hover:bg-accent/10"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
             </div>
+
+            <AnimatePresence>
+                {toDelete && (
+                    <ConfirmModal
+                        title={`¿Borrar a ${toDelete.name}?`}
+                        message={<>Se quita del torneo y se descuentan <b className="text-white">{formatMoney(playerSpent(toDelete))}</b> del pozo. Usalo solo si se anotó por error; si perdió sus fichas, usá <b className="text-white">Eliminar</b> (calavera).</>}
+                        confirmText="Borrar"
+                        isDestructive
+                        onConfirm={() => {
+                            deletePlayer(toDelete.id);
+                            setToDelete(null);
+                        }}
+                        onCancel={() => setToDelete(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };
 
-const HistoryDropdown: React.FC<{ onSelect: (name: string) => void }> = ({ onSelect }) => {
-    const { playerHistory, clearPlayerHistory } = useGameStore();
-    const [isOpen, setIsOpen] = useState(false);
+const ActionButton: React.FC<{ label: string; onClick: () => void; className?: string; active?: boolean; children: React.ReactNode }> = ({ label, onClick, className, active, children }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        title={label}
+        aria-label={label}
+        aria-pressed={active}
+        className={cn('h-8 w-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', className)}
+    >
+        {children}
+    </button>
+);
 
-    if (playerHistory.length === 0) return null;
+const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => void }> = ({ player, onEdit, onDelete }) => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const { rebuyPlayer, addonPlayer, bustPlayer, toggleAway, restorePlayer } = useGameStore.getState();
+    const isAway = player.status === 'away';
+
+    const handleBust = () => {
+        const chips = player.chips;
+        bustPlayer(player.id);
+        toast.warning(`${player.name} quedó afuera`, { label: 'Deshacer', onClick: () => restorePlayer(player.id, chips) });
+    };
 
     return (
-        <div className="relative">
-            <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(!isOpen)}
-                className="h-9 w-9 p-0 bg-surface border border-white/10"
-                title="Jugadores Recientes"
-            >
-                <RefreshCcw className="w-4 h-4 text-gray-400" />
-            </Button>
-
-            {isOpen && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-                    <div className="absolute right-0 top-10 w-48 bg-surface border border-white/10 rounded-lg shadow-xl z-20 overflow-hidden">
-                        <div className="p-2 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-white/5 flex justify-between items-center">
-                            <span>Recientes</span>
-                            <button onClick={clearPlayerHistory} className="text-red-500 hover:text-red-400 text-[10px]">Borrar</button>
-                        </div>
-                        <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                            {playerHistory.map((name) => (
-                                <button
-                                    key={name}
-                                    type="button"
-                                    onClick={() => {
-                                        onSelect(name);
-                                        setIsOpen(false);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                                >
-                                    {name}
-                                </button>
-                            ))}
-                        </div>
+        <div className={cn(
+            'rounded-xl p-3 border transition-colors',
+            isAway ? 'bg-warning/[0.04] border-warning/25' : 'bg-surface-light/60 border-white/[0.04] hover:border-white/10'
+        )}>
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className={cn('font-bold truncate flex items-center gap-2', isAway ? 'text-warning' : 'text-white')}>
+                        <span className="truncate">{player.name}</span>
+                        {isAway && <span className="text-[9px] font-black bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded tracking-widest uppercase shrink-0">Ausente</span>}
                     </div>
-                </>
-            )}
+                    <div className="text-xs flex items-center gap-2 mt-0.5 font-mono">
+                        <span className="text-primary">{formatChips(player.chips)}</span>
+                        <span className="text-gray-500">{formatMoney(playerSpent(player))}</span>
+                        {player.rebuys > 0 && <span className="text-secondary">{player.rebuys}R</span>}
+                        {player.addons > 0 && <span className="text-accent">{player.addons}A</span>}
+                    </div>
+                </div>
+                {player.table !== undefined && (
+                    <span className="text-[10px] font-mono text-gray-400 bg-black/30 border border-white/5 px-1.5 py-0.5 rounded shrink-0" title={`Mesa ${player.table}, asiento ${player.seat}`}>
+                        M{player.table}·A{player.seat}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex items-center gap-1 mt-2 -ml-1">
+                <ActionButton label="Re-entrada" onClick={() => { rebuyPlayer(player.id); toast.success(`Re-entrada de ${player.name}`); }} className="text-secondary hover:bg-secondary/10">
+                    <RefreshCcw className="w-4 h-4" />
+                </ActionButton>
+                <ActionButton label="Add-on" onClick={() => { addonPlayer(player.id); toast.success(`Add-on de ${player.name}`); }} className="text-accent hover:bg-accent/10">
+                    <Plus className="w-4 h-4" />
+                </ActionButton>
+                <ActionButton label={isAway ? 'Marcar presente' : 'Marcar ausente'} active={isAway} onClick={() => toggleAway(player.id)} className={isAway ? 'text-warning bg-warning/10' : 'text-gray-400 hover:text-warning hover:bg-warning/10'}>
+                    <Coffee className="w-4 h-4" />
+                </ActionButton>
+                <ActionButton label="Eliminar (perdió sus fichas)" onClick={handleBust} className="text-gray-400 hover:text-accent hover:bg-accent/10">
+                    <Skull className="w-4 h-4" />
+                </ActionButton>
+
+                <div className="ml-auto flex items-center gap-1">
+                    {menuOpen && (
+                        <>
+                            <ActionButton label="Editar" onClick={() => { setMenuOpen(false); onEdit(); }} className="text-gray-300 hover:bg-white/10">
+                                <Pencil className="w-3.5 h-3.5" />
+                            </ActionButton>
+                            <ActionButton label="Borrar del torneo" onClick={() => { setMenuOpen(false); onDelete(); }} className="text-accent/80 hover:text-accent hover:bg-accent/10">
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </ActionButton>
+                        </>
+                    )}
+                    <ActionButton label={menuOpen ? 'Menos opciones' : 'Más opciones'} active={menuOpen} onClick={() => setMenuOpen(!menuOpen)} className={menuOpen ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}>
+                        <MoreVertical className="w-4 h-4" />
+                    </ActionButton>
+                </div>
+            </div>
         </div>
+    );
+};
+
+const EditPlayerRow: React.FC<{ player: Player; onDone: () => void }> = ({ player, onDone }) => {
+    const [name, setName] = useState(player.name);
+    const [chips, setChips] = useState(player.chips);
+    const [buyIn, setBuyIn] = useState(player.buyInAmount);
+
+    const save = () => {
+        if (!name.trim()) return;
+        useGameStore.getState().updatePlayer(player.id, { name: name.trim(), chips, buyInAmount: buyIn });
+        onDone();
+    };
+
+    return (
+        <form
+            onSubmit={(e) => { e.preventDefault(); save(); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') onDone(); }}
+            className="rounded-xl p-3 border border-primary/30 bg-surface-light/60 space-y-2"
+        >
+            <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                aria-label="Nombre"
+                className="w-full h-9 rounded-lg border border-white/10 bg-black/30 px-3 text-sm focus:outline-none focus:border-primary/60"
+            />
+            <div className="grid grid-cols-2 gap-2">
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider">
+                    Fichas
+                    <NumberField value={chips} onValueChange={setChips} className="h-9 mt-1" />
+                </label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider">
+                    Entrada
+                    <NumberField value={buyIn} onValueChange={setBuyIn} prefix="$" className="h-9 mt-1" />
+                </label>
+            </div>
+            <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={onDone} className="h-8">Cancelar</Button>
+                <Button size="sm" type="submit" className="h-8">Guardar</Button>
+            </div>
+        </form>
+    );
+};
+
+const AddPlayerForm: React.FC = () => {
+    const players = useGameStore(s => s.players);
+    const playerHistory = useGameStore(s => s.playerHistory);
+    const startingStack = useGameStore(s => s.startingStack);
+    const buyIn = useGameStore(s => s.buyIn);
+    const [name, setName] = useState('');
+    const [stack, setStack] = useState(startingStack);
+    const [entry, setEntry] = useState(buyIn);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const taken = new Set(players.map(p => p.name.toLowerCase()));
+    const isDuplicate = taken.has(name.trim().toLowerCase());
+    const suggestions = playerHistory.filter(n => !taken.has(n.toLowerCase()));
+    const filtered = name.trim()
+        ? suggestions.filter(n => n.toLowerCase().includes(name.trim().toLowerCase()))
+        : suggestions;
+
+    const add = (playerName: string) => {
+        const clean = playerName.trim();
+        if (!clean || taken.has(clean.toLowerCase())) return;
+        useGameStore.getState().addPlayer(clean, stack, entry);
+        setName('');
+        setShowHistory(false);
+        // El formulario queda abierto para anotar a varios seguidos
+        inputRef.current?.focus();
+    };
+
+    return (
+        <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden shrink-0"
+        >
+            <form
+                onSubmit={(e) => { e.preventDefault(); add(name); }}
+                className="flex flex-col gap-2 bg-black/20 p-3 rounded-xl border border-white/10"
+            >
+                <div className="flex gap-2">
+                    <input
+                        ref={inputRef}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Nombre del jugador"
+                        aria-label="Nombre del jugador"
+                        autoFocus
+                        className={cn(
+                            'flex-1 min-w-0 h-10 rounded-lg border bg-surface px-3 text-sm focus:outline-none',
+                            isDuplicate ? 'border-accent/60' : 'border-white/10 focus:border-primary/60'
+                        )}
+                    />
+                    {suggestions.length > 0 && (
+                        <Button type="button" variant="outline" size="icon" className="h-10 w-10" onClick={() => setShowHistory(!showHistory)} title="Jugadores habituales" aria-label="Jugadores habituales">
+                            <History className="w-4 h-4" />
+                        </Button>
+                    )}
+                    <Button type="submit" size="icon" className="h-10 w-10" disabled={!name.trim() || isDuplicate} aria-label="Agregar jugador">
+                        <Plus className="w-5 h-5" />
+                    </Button>
+                </div>
+                {isDuplicate && <p className="text-[11px] text-accent">Ya hay un jugador con ese nombre.</p>}
+
+                {(showHistory || name.trim()) && filtered.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                        {filtered.slice(0, 12).map(n => (
+                            <button
+                                key={n}
+                                type="button"
+                                onClick={() => add(n)}
+                                className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:border-primary/50 hover:text-white"
+                            >
+                                + {n}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-[10px] text-gray-500 hover:text-gray-300 uppercase tracking-wider font-bold text-left">
+                    {showAdvanced ? '▾' : '▸'} {formatChips(stack)} fichas · {formatMoney(entry)}
+                </button>
+                {showAdvanced && (
+                    <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px] text-gray-500 uppercase tracking-wider">
+                            Fichas
+                            <NumberField value={stack} onValueChange={setStack} className="h-9 mt-1" />
+                        </label>
+                        <label className="text-[10px] text-gray-500 uppercase tracking-wider">
+                            Entrada
+                            <NumberField value={entry} onValueChange={setEntry} prefix="$" className="h-9 mt-1" />
+                        </label>
+                    </div>
+                )}
+            </form>
+        </motion.div>
     );
 };

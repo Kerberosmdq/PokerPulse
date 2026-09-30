@@ -1,55 +1,52 @@
 import React from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { chipsToColorUp, formatChips, formatShort } from '../../utils/tournament';
+import { cn } from '../../utils/cn';
+
+export const PokerChip: React.FC<{ color: string; value: number; size?: number; className?: string }> = ({ color, value, size = 44, className }) => {
+    const edge = color.toLowerCase() === '#000000' || color.toLowerCase() === '#111111' ? '#3a3a3a' : color;
+    return (
+        <div className={cn('relative rounded-full shrink-0 shadow-[0_4px_10px_rgba(0,0,0,0.5)]', className)} style={{ width: size, height: size }}>
+            <div
+                className="absolute inset-0 rounded-full border-dashed"
+                style={{ borderColor: edge, borderWidth: size * 0.13, backgroundColor: '#1a1a1a', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8)' }}
+            />
+            <div className="absolute rounded-full flex items-center justify-center" style={{ inset: size * 0.2, backgroundColor: edge }}>
+                <div className="w-[88%] h-[88%] rounded-full bg-[#141414] flex items-center justify-center border border-white/10">
+                    <span className="font-black text-white tracking-tighter" style={{ fontSize: Math.max(7, size * 0.22) }}>{formatShort(value)}</span>
+                </div>
+            </div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/15 to-transparent pointer-events-none" />
+        </div>
+    );
+};
 
 export const ChipList: React.FC = () => {
-    const { chipValues } = useGameStore();
+    const chipValues = useGameStore(s => s.chipValues);
+    const blindsStructure = useGameStore(s => s.blindsStructure);
+    const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
 
-    // Sort chips by value ascending
-    const sortedChips = [...chipValues].sort((a, b) => a.value - b.value);
+    const sortedChips = [...chipValues].filter(c => c.value > 0).sort((a, b) => a.value - b.value);
+    const obsolete = new Set(chipsToColorUp(chipValues, blindsStructure, currentLevelIndex).map(c => c.value));
 
     return (
-        <div className="grid grid-cols-2 gap-4">
-            {sortedChips.map((chip, index) => (
-                <div key={index} className="flex items-center gap-4 bg-surface-light/30 p-3 rounded-xl border border-white/5 group hover:bg-surface-light/50 transition-colors">
-                    {/* Next Gen Chip Design */}
-                    <div className="relative w-12 h-12 shadow-[0_4px_10px_rgba(0,0,0,0.5)] rounded-full transition-transform group-hover:scale-110 duration-300 shrink-0">
-                        {/* Base Color & Edge Spots */}
-                        <div
-                            className="absolute inset-0 rounded-full border-[6px] border-dashed"
-                            style={{
-                                borderColor: chip.color === '#000000' ? '#333333' : chip.color,
-                                backgroundColor: '#1a1a1a',
-                                boxShadow: `inset 0 0 10px rgba(0,0,0,0.8), ${chip.color === '#000000' ? '0 0 5px rgba(255,255,255,0.2)' : 'none'}`
-                            }}
-                        />
-
-                        {/* Inner Ring */}
-                        <div className="absolute inset-[6px] rounded-full border-2 border-white/20 bg-gradient-to-br from-white/10 to-transparent" />
-
-                        {/* Center Value */}
-                        <div
-                            className="absolute inset-[10px] rounded-full flex items-center justify-center"
-                            style={{ backgroundColor: chip.color }}
-                        >
-                            <div className="w-[90%] h-[90%] rounded-full bg-[#1a1a1a] flex items-center justify-center border border-white/10">
-                                <span className="text-[10px] font-black text-white tracking-tighter">
-                                    {chip.value >= 1000 ? `${chip.value / 1000}k` : chip.value}
-                                </span>
-                            </div>
+        <div className="grid grid-cols-2 gap-2">
+            {sortedChips.map((chip) => {
+                const retire = obsolete.has(chip.value);
+                return (
+                    <div
+                        key={`${chip.color}-${chip.value}`}
+                        className={cn('flex items-center gap-3 p-2.5 rounded-xl border', retire ? 'border-dashed border-white/10 opacity-50' : 'bg-surface-light/30 border-white/5')}
+                        title={retire ? 'Ya no hace falta: se puede retirar en el próximo descanso' : undefined}
+                    >
+                        <PokerChip color={chip.color} value={chip.value} size={36} />
+                        <div className="min-w-0">
+                            <div className="font-bold text-white font-mono tabular">{formatChips(chip.value)}</div>
+                            {retire && <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">Retirar</div>}
                         </div>
-
-                        {/* Shine Effect */}
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/20 to-transparent opacity-50 pointer-events-none" />
                     </div>
-
-                    <div className="flex flex-col">
-                        <span className="font-bold text-white text-xl font-mono tracking-wider drop-shadow-md">
-                            {chip.value.toLocaleString()}
-                        </span>
-                        <div className="h-1 w-full rounded-full mt-1 opacity-50" style={{ backgroundColor: chip.color }} />
-                    </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 };

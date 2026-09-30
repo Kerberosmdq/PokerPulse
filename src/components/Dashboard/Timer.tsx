@@ -1,159 +1,152 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
-import { Play, Pause, SkipForward, SkipBack, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Coffee } from 'lucide-react';
 import { soundManager } from '../../utils/audio';
+import { cn } from '../../utils/cn';
+import { findNextPlayingLevel, formatChips, formatTime, getLevelNumber, secondsUntilNextBreak } from '../../utils/tournament';
+
+const RADIUS = 180;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export const Timer: React.FC = () => {
-    const {
-        timerSecondsRemaining,
-        isPaused,
-        startTimer,
-        pauseTimer,
-        resetTimer,
-        tickTimer,
-        nextLevel,
-        prevLevel,
-        blindsStructure,
-        currentLevelIndex
-    } = useGameStore();
+    const timerSecondsRemaining = useGameStore(s => s.timerSecondsRemaining);
+    const isPaused = useGameStore(s => s.isPaused);
+    const blindsStructure = useGameStore(s => s.blindsStructure);
+    const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
+    const { startTimer, pauseTimer, resetTimer, nextLevel, prevLevel, adjustTimer } = useGameStore.getState();
 
-    // Sound effects
-    useEffect(() => {
-        if (!isPaused && timerSecondsRemaining <= 10 && timerSecondsRemaining > 0) {
-            soundManager.playTimerWarning();
-        }
-    }, [timerSecondsRemaining, isPaused]);
-
-    useEffect(() => {
-        // Play sound when level changes (and it's not the initial load)
-        if (currentLevelIndex > 0) {
-            soundManager.playBlindsUp();
-        }
-    }, [currentLevelIndex]);
-
-    useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | undefined;
-        if (!isPaused) {
-            interval = setInterval(() => {
-                tickTimer();
-            }, 1000);
-        }
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isPaused, tickTimer]);
-
-    const handleStart = () => {
+    const withClick = (fn: () => void) => () => {
         soundManager.playClick();
-        startTimer();
+        fn();
     };
 
-    const handlePause = () => {
-        soundManager.playClick();
-        pauseTimer();
-    };
+    const level = blindsStructure[currentLevelIndex];
+    const isBreak = level?.type === 'break';
+    const totalSeconds = (level?.duration ?? 1) * 60;
+    const progress = Math.min(1, Math.max(0, 1 - timerSecondsRemaining / totalSeconds));
+    const isLastMinute = !isBreak && timerSecondsRemaining <= 60 && timerSecondsRemaining > 0;
+    const nextPlaying = findNextPlayingLevel(blindsStructure, currentLevelIndex);
+    const toBreak = secondsUntilNextBreak(blindsStructure, currentLevelIndex, timerSecondsRemaining);
+    const isLastLevel = currentLevelIndex >= blindsStructure.length - 1;
 
-    const handleNext = () => {
-        soundManager.playClick();
-        nextLevel();
-    };
-
-    const handlePrev = () => {
-        soundManager.playClick();
-        prevLevel();
-    };
-
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const currentLevel = blindsStructure[currentLevelIndex];
-    const progress = currentLevel
-        ? ((currentLevel.duration * 60 - timerSecondsRemaining) / (currentLevel.duration * 60)) * 100
-        : 0;
+    const ringColor = isBreak ? 'var(--color-warning)' : isLastMinute ? 'var(--color-accent)' : 'var(--color-primary)';
 
     return (
-        <div className="flex flex-col items-center justify-center space-y-10 p-8 relative">
-            {/* Circular Progress Timer */}
-            <div className="relative w-96 h-96 flex items-center justify-center">
-                {/* Outer Glow Ring */}
-                <div className="absolute inset-0 rounded-full bg-primary/5 blur-3xl animate-pulse" />
+        <div className="w-full flex flex-col items-center gap-5">
+            {/* Etiqueta de nivel */}
+            <div className={cn(
+                'px-4 py-1.5 rounded-full border text-xs font-black uppercase tracking-[0.25em] flex items-center gap-2',
+                isBreak ? 'border-warning/40 bg-warning/10 text-warning' : 'border-primary/30 bg-primary/10 text-primary'
+            )}>
+                {isBreak ? <><Coffee className="w-3.5 h-3.5" /> Descanso</> : <>Nivel {getLevelNumber(blindsStructure, currentLevelIndex)}</>}
+                {isPaused && <span className="text-gray-400 tracking-widest">· En pausa</span>}
+            </div>
 
-                <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_15px_rgba(0,255,157,0.3)]">
-                    {/* Track */}
+            {/* Reloj circular */}
+            <div className="relative w-full max-w-[400px] lg:max-w-[min(440px,calc(100dvh-470px))] lg:min-w-[240px] aspect-square @container">
+                <svg viewBox="0 0 400 400" className="w-full h-full -rotate-90">
+                    <circle cx="200" cy="200" r={RADIUS} stroke="rgba(255,255,255,0.06)" strokeWidth="10" fill="none" />
                     <circle
-                        cx="192"
-                        cy="192"
-                        r="170"
-                        stroke="#1e1e1e"
-                        strokeWidth="8"
-                        fill="transparent"
-                    />
-                    {/* Progress */}
-                    <motion.circle
-                        cx="192"
-                        cy="192"
-                        r="170"
-                        stroke="#00ff9d"
+                        cx="200"
+                        cy="200"
+                        r={RADIUS}
+                        stroke={ringColor}
                         strokeWidth="12"
-                        fill="transparent"
-                        strokeDasharray={2 * Math.PI * 170}
-                        strokeDashoffset={2 * Math.PI * 170 * (1 - progress / 100)}
+                        fill="none"
                         strokeLinecap="round"
-                        initial={{ strokeDashoffset: 2 * Math.PI * 170 }}
-                        animate={{ strokeDashoffset: 2 * Math.PI * 170 * (1 - progress / 100) }}
-                        transition={{ duration: 1, ease: "linear" }}
+                        strokeDasharray={CIRCUMFERENCE}
+                        strokeDashoffset={CIRCUMFERENCE * progress}
+                        style={{
+                            transition: 'stroke-dashoffset 1s linear, stroke 0.4s',
+                            filter: `drop-shadow(0 0 10px color-mix(in oklab, ${ringColor} 60%, transparent))`,
+                            opacity: isPaused ? 0.45 : 1,
+                        }}
                     />
                 </svg>
 
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                    <div className="text-[7rem] font-mono font-bold text-white tracking-tighter leading-none drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-[12%]">
+                    <div
+                        className={cn(
+                            'font-mono font-bold tabular tracking-tighter leading-none text-glow-white transition-colors',
+                            isLastMinute ? 'text-accent animate-pulse' : isPaused ? 'text-gray-300' : 'text-white'
+                        )}
+                        style={{ fontSize: timerSecondsRemaining >= 3600 ? '17cqw' : '24cqw' }}
+                    >
                         {formatTime(timerSecondsRemaining)}
                     </div>
-                    <div className={`text-2xl font-bold tracking-widest uppercase mt-4 drop-shadow-[0_0_5px_rgba(0,255,157,0.8)] ${currentLevel?.type === 'break' ? 'text-yellow-400 animate-pulse' : 'text-primary'}`}>
-                        {currentLevel?.type === 'break' ? 'TIEMPO DE DESCANSO' : `Nivel ${currentLevelIndex + 1}`}
+
+                    {isBreak ? (
+                        <div className="mt-[4cqw] text-gray-400 uppercase tracking-widest" style={{ fontSize: '3.5cqw' }}>
+                            {nextPlaying ? <>Vuelve con <span className="text-white font-bold">{formatChips(nextPlaying.smallBlind)} / {formatChips(nextPlaying.bigBlind)}</span></> : 'Fin de la estructura'}
+                        </div>
+                    ) : level && (
+                        <div className="mt-[4cqw]">
+                            <div className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-bold">Ciegas</div>
+                            <div className="font-black text-white tabular leading-tight" style={{ fontSize: '9cqw' }}>
+                                {formatChips(level.smallBlind)} <span className="text-white/25">/</span> {formatChips(level.bigBlind)}
+                            </div>
+                            {level.ante > 0 && (
+                                <div className="text-sm font-bold text-accent tracking-wider">Ante {formatChips(level.ante)}</div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Controles */}
+            <div className="flex items-center gap-2 sm:gap-4">
+                <Button variant="ghost" size="icon" onClick={withClick(prevLevel)} disabled={currentLevelIndex === 0} title="Nivel anterior (←)" aria-label="Nivel anterior" className="rounded-full w-11 h-11">
+                    <SkipBack className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" onClick={withClick(() => adjustTimer(-60))} title="Restar 1 minuto (−)" className="rounded-full w-11 h-11 p-0 font-mono text-xs normal-case tracking-normal hover:text-accent">
+                    −1m
+                </Button>
+
+                <Button
+                    onClick={withClick(isPaused ? startTimer : pauseTimer)}
+                    size="lg"
+                    aria-label={isPaused ? 'Iniciar reloj' : 'Pausar reloj'}
+                    title="Espacio"
+                    variant={isPaused ? 'primary' : 'secondary'}
+                    className={cn('w-40 sm:w-48 h-16 sm:h-18 rounded-full text-lg sm:text-xl font-black tracking-widest', isPaused ? 'glow-primary' : 'glow-secondary')}
+                >
+                    {isPaused ? <Play className="w-7 h-7 fill-current" /> : <Pause className="w-7 h-7 fill-current" />}
+                    {isPaused ? 'Iniciar' : 'Pausar'}
+                </Button>
+
+                <Button variant="ghost" onClick={withClick(() => adjustTimer(60))} title="Sumar 1 minuto (+)" className="rounded-full w-11 h-11 p-0 font-mono text-xs normal-case tracking-normal hover:text-primary">
+                    +1m
+                </Button>
+                <Button variant="ghost" size="icon" onClick={withClick(nextLevel)} disabled={isLastLevel} title="Nivel siguiente (→)" aria-label="Nivel siguiente" className="rounded-full w-11 h-11">
+                    <SkipForward className="w-5 h-5" />
+                </Button>
+            </div>
+
+            {/* Próximo nivel / descanso */}
+            <div className="w-full max-w-md grid grid-cols-2 gap-3 text-center">
+                <div className="rounded-xl bg-white/[0.03] border border-white/5 px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Próximo nivel</div>
+                    <div className="text-sm font-bold text-gray-200 tabular mt-0.5">
+                        {nextPlaying
+                            ? <>{formatChips(nextPlaying.smallBlind)} / {formatChips(nextPlaying.bigBlind)}{nextPlaying.ante > 0 && <span className="text-accent/80"> · A {formatChips(nextPlaying.ante)}</span>}</>
+                            : '—'}
+                    </div>
+                </div>
+                <div className="rounded-xl bg-white/[0.03] border border-white/5 px-3 py-2.5">
+                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Próximo descanso</div>
+                    <div className="text-sm font-bold text-warning/90 tabular mt-0.5">
+                        {isBreak ? 'Ahora' : toBreak !== null ? `en ${formatTime(toBreak)}` : 'Sin descansos'}
                     </div>
                 </div>
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-8">
-                <Button variant="ghost" onClick={handlePrev} title="Nivel Anterior" className="hover:text-primary hover:bg-primary/10 rounded-full w-12 h-12 p-0">
-                    <SkipBack className="w-6 h-6" />
-                </Button>
-
-                {isPaused ? (
-                    <Button
-                        onClick={handleStart}
-                        size="lg"
-                        className="w-48 h-20 rounded-full text-2xl font-black tracking-widest uppercase bg-gradient-to-r from-primary to-emerald-400 hover:from-primary/90 hover:to-emerald-400/90 text-black shadow-[0_0_40px_rgba(0,255,157,0.4)] hover:shadow-[0_0_60px_rgba(0,255,157,0.6)] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 border-4 border-black/20"
-                    >
-                        <Play className="w-8 h-8 fill-current" />
-                        <span className="mt-1">Iniciar</span>
-                    </Button>
-                ) : (
-                    <Button
-                        onClick={handlePause}
-                        size="lg"
-                        className="w-48 h-20 rounded-full text-2xl font-black tracking-widest uppercase bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-400/90 hover:to-blue-500/90 text-black shadow-[0_0_40px_rgba(34,211,238,0.5)] hover:shadow-[0_0_60px_rgba(34,211,238,0.7)] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 border-4 border-black/20"
-                    >
-                        <Pause className="w-8 h-8 fill-current" />
-                        <span className="mt-1">Pausar</span>
-                    </Button>
-                )}
-
-                <Button variant="ghost" onClick={handleNext} title="Siguiente Nivel" className="hover:text-primary hover:bg-primary/10 rounded-full w-12 h-12 p-0">
-                    <SkipForward className="w-6 h-6" />
-                </Button>
-            </div>
-
-            <Button variant="ghost" onClick={resetTimer} title="Reiniciar Nivel" className="absolute bottom-0 right-0 text-gray-600 hover:text-white">
-                <RefreshCw className="w-4 h-4" />
-            </Button>
+            <button
+                onClick={resetTimer}
+                className="text-[11px] text-gray-500 hover:text-white uppercase tracking-widest font-bold flex items-center gap-1.5 transition-colors"
+            >
+                <RotateCcw className="w-3 h-3" /> Reiniciar nivel
+            </button>
         </div>
     );
 };

@@ -1,116 +1,266 @@
-import React from 'react';
-import { useGameStore } from '../../store/gameStore';
+import React, { useEffect, useState } from 'react';
+import { X, Maximize, ExternalLink, Coffee } from 'lucide-react';
+import { STORAGE_KEY, useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
-import { X } from 'lucide-react';
+import { Logo } from '../ui/Logo';
+import { cn } from '../../utils/cn';
+import {
+    computePayouts, findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber,
+    getPayoutPercents, getTournamentStats, placeMedal, secondsUntilNextBreak,
+} from '../../utils/tournament';
 
-interface TVModeProps {
-    onClose: () => void;
-}
+/**
+ * Tiempo restante calculado localmente a partir de levelEndTime: la pantalla TV se ve fluida
+ * aunque el estado le llegue desde otra ventana.
+ */
+const useLiveRemaining = () => {
+    const isPaused = useGameStore(s => s.isPaused);
+    const levelEndTime = useGameStore(s => s.levelEndTime);
+    const stored = useGameStore(s => s.timerSecondsRemaining);
+    const [now, setNow] = useState(() => Date.now());
 
-export const TVMode: React.FC<TVModeProps> = ({ onClose }) => {
-    const {
-        timerSecondsRemaining,
-        blindsStructure,
-        currentLevelIndex,
-        players,
-        prizePool
-    } = useGameStore();
+    useEffect(() => {
+        if (isPaused || !levelEndTime) return;
+        const id = setInterval(() => setNow(Date.now()), 250);
+        return () => clearInterval(id);
+    }, [isPaused, levelEndTime]);
 
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
+    return isPaused || !levelEndTime ? stored : Math.max(0, Math.ceil((levelEndTime - now) / 1000));
+};
 
-    const currentLevel = blindsStructure[currentLevelIndex];
-    const nextLevel = blindsStructure[currentLevelIndex + 1];
-    const activePlayers = players.filter(p => p.status !== 'busted');
-    const avgStack = activePlayers.length > 0
-        ? Math.floor(players.reduce((sum, p) => sum + p.chips, 0) / activePlayers.length)
-        : 0;
+/** Controles que se ocultan (junto con el cursor) tras unos segundos sin mover el mouse. */
+const useIdleControls = (delay = 2500) => {
+    const [visible, setVisible] = useState(true);
+    useEffect(() => {
+        let timeout = setTimeout(() => setVisible(false), delay);
+        const onMove = () => {
+            setVisible(true);
+            clearTimeout(timeout);
+            timeout = setTimeout(() => setVisible(false), delay);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchstart', onMove);
+        return () => {
+            clearTimeout(timeout);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('touchstart', onMove);
+        };
+    }, [delay]);
+    return visible;
+};
+
+const toggleFullscreen = async () => {
+    try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+    } catch {
+        /* Pantalla completa no disponible */
+    }
+};
+
+/** Pantalla grande de solo lectura: reloj, ciegas, pozo y estado del torneo. */
+export const TVDisplay: React.FC = () => {
+    const blindsStructure = useGameStore(s => s.blindsStructure);
+    const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
+    const players = useGameStore(s => s.players);
+    const prizePool = useGameStore(s => s.prizePool);
+    const isPaused = useGameStore(s => s.isPaused);
+    const tournamentName = useGameStore(s => s.tournamentName);
+    const payoutStructure = useGameStore(s => s.payoutStructure);
+    const customPayouts = useGameStore(s => s.customPayouts);
+    const remaining = useLiveRemaining();
+
+    const level = blindsStructure[currentLevelIndex];
+    const isBreak = level?.type === 'break';
+    const nextPlaying = findNextPlayingLevel(blindsStructure, currentLevelIndex);
+    const stats = getTournamentStats(players);
+    const toBreak = secondsUntilNextBreak(blindsStructure, currentLevelIndex, remaining);
+    const progress = level ? Math.min(1, Math.max(0, 1 - remaining / (level.duration * 60))) : 0;
+    const isLastMinute = !isBreak && remaining <= 60 && remaining > 0;
+    const payouts = computePayouts(prizePool, getPayoutPercents(payoutStructure, customPayouts)).slice(0, 3);
+    const bbRef = isBreak ? nextPlaying?.bigBlind : level?.bigBlind;
 
     return (
-        <div className="fixed inset-0 z-50 bg-black text-white flex flex-col overflow-hidden cursor-none hover:cursor-default group">
-            {/* Background Decor */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-                <div className="absolute top-[-20%] left-[20%] w-[60%] h-[60%] bg-primary/10 rounded-full blur-[150px] animate-pulse" />
-                <div className="absolute bottom-[-20%] right-[20%] w-[60%] h-[60%] bg-secondary/10 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute inset-0 flex flex-col p-[3vw] gap-[2vw]">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10" aria-hidden="true">
+                <div className="absolute top-[-20%] left-[10%] w-[60%] h-[60%] bg-primary/10 rounded-full blur-[160px]" />
+                <div className="absolute bottom-[-20%] right-[10%] w-[50%] h-[50%] bg-secondary/10 rounded-full blur-[160px]" />
             </div>
 
-            {/* Hidden Back Button */}
-            <div className="absolute top-0 left-0 w-full h-24 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-b from-black/80 to-transparent flex items-start justify-end p-6">
-                <Button
-                    variant="ghost"
-                    onClick={onClose}
-                    className="text-white/50 hover:text-white hover:bg-white/10"
+            {/* Encabezado */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-[1vw]">
+                    <Logo className="w-[3.5vw] h-[3.5vw] min-w-10 min-h-10" />
+                    <span className="font-black tracking-[0.2em] text-gray-300" style={{ fontSize: 'clamp(1rem, 1.8vw, 2.2rem)' }}>
+                        {tournamentName || 'NEXPULSE'}
+                    </span>
+                </div>
+                <div
+                    className={cn('px-[1.5vw] py-[0.5vw] rounded-full border font-black uppercase tracking-[0.25em]', isBreak ? 'border-warning/50 text-warning bg-warning/10' : 'border-primary/40 text-primary bg-primary/10')}
+                    style={{ fontSize: 'clamp(0.9rem, 1.5vw, 2rem)' }}
                 >
-                    <X className="w-8 h-8 mr-2" /> Salir de Modo TV
+                    {isBreak ? 'Descanso' : `Nivel ${getLevelNumber(blindsStructure, currentLevelIndex)}`}
+                    {isPaused && <span className="text-gray-400"> · Pausa</span>}
+                </div>
+            </div>
+
+            <div className="flex-1 grid grid-cols-12 gap-[3vw] min-h-0">
+                {/* Reloj + ciegas */}
+                <div className="col-span-12 lg:col-span-7 flex flex-col justify-center items-center text-center gap-[2vw]">
+                    <div
+                        className={cn('font-mono font-bold leading-none tracking-tighter tabular', isLastMinute ? 'text-accent' : isBreak ? 'text-warning' : isPaused ? 'text-gray-400' : 'text-white')}
+                        style={{ fontSize: remaining >= 3600 ? '13vw' : '17vw', textShadow: '0 0 60px rgba(255,255,255,0.25)' }}
+                    >
+                        {formatTime(remaining)}
+                    </div>
+                    <div className="w-[80%] h-[0.6vw] min-h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                            className={cn('h-full rounded-full transition-[width] duration-1000 ease-linear', isBreak ? 'bg-warning' : isLastMinute ? 'bg-accent' : 'bg-primary')}
+                            style={{ width: `${progress * 100}%` }}
+                        />
+                    </div>
+
+                    {isBreak ? (
+                        <div className="flex items-center gap-[1vw] text-warning font-black uppercase tracking-widest" style={{ fontSize: '3.5vw' }}>
+                            <Coffee style={{ width: '3.5vw', height: '3.5vw' }} /> Descanso
+                        </div>
+                    ) : level && (
+                        <div>
+                            <div className="text-gray-500 uppercase tracking-[0.3em] font-light" style={{ fontSize: '2vw' }}>Ciegas</div>
+                            <div className="font-black leading-none text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary tabular" style={{ fontSize: '7.5vw' }}>
+                                {formatChips(level.smallBlind)}<span className="text-white/20"> / </span>{formatChips(level.bigBlind)}
+                            </div>
+                            {level.ante > 0 && (
+                                <div className="text-accent font-bold mt-[0.5vw]" style={{ fontSize: '3vw' }}>ANTE {formatChips(level.ante)}</div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Información */}
+                <div className="hidden lg:flex col-span-5 flex-col justify-center gap-[1.6vw] pl-[3vw] border-l border-white/10">
+                    <InfoBlock label={isBreak ? 'Al volver' : 'Próximo nivel'}>
+                        <span className="text-gray-200">
+                            {nextPlaying ? `${formatChips(nextPlaying.smallBlind)} / ${formatChips(nextPlaying.bigBlind)}` : 'Fin'}
+                        </span>
+                        {nextPlaying && nextPlaying.ante > 0 && <span className="text-accent/80" style={{ fontSize: '1.6vw' }}> ante {formatChips(nextPlaying.ante)}</span>}
+                    </InfoBlock>
+
+                    <InfoBlock label="Bolsa de premios">
+                        <span className="text-secondary">{formatMoney(prizePool)}</span>
+                    </InfoBlock>
+
+                    {payouts.length > 1 && (
+                        <div className="flex gap-[1.5vw] text-gray-300" style={{ fontSize: '1.5vw' }}>
+                            {payouts.map(p => (
+                                <span key={p.place} className="tabular">{placeMedal(p.place)} {formatMoney(p.amount)}</span>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="h-px bg-white/10" />
+
+                    <div className="grid grid-cols-2 gap-[2vw]">
+                        <InfoBlock label="Jugadores" small>
+                            <span className="text-primary">{stats.alive}</span>
+                            <span className="text-gray-600"> / {stats.total}</span>
+                        </InfoBlock>
+                        <InfoBlock label="Stack promedio" small>
+                            {formatChips(stats.avgStack)}
+                            {bbRef ? <span className="block text-gray-500 font-medium" style={{ fontSize: '1.4vw' }}>{Math.round(stats.avgStack / bbRef)} ciegas grandes</span> : null}
+                        </InfoBlock>
+                    </div>
+
+                    {toBreak !== null && !isBreak && (
+                        <InfoBlock label="Próximo descanso" small>
+                            <span className="text-warning/90">{formatTime(toBreak)}</span>
+                        </InfoBlock>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const InfoBlock: React.FC<{ label: string; small?: boolean; children: React.ReactNode }> = ({ label, small, children }) => (
+    <div>
+        <div className="text-gray-500 uppercase tracking-[0.2em]" style={{ fontSize: '1.2vw' }}>{label}</div>
+        <div className="font-bold text-white tabular leading-tight" style={{ fontSize: small ? '3.4vw' : '4.4vw' }}>{children}</div>
+    </div>
+);
+
+/** Modo TV dentro de la app del anfitrión. */
+export const TVMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const controlsVisible = useIdleControls();
+
+    useEffect(() => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => { });
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.fullscreenElement) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+        };
+    }, [onClose]);
+
+    const openExternal = () => {
+        window.open(`${window.location.pathname}?view=tv`, 'nexpulse-tv', 'popup,width=1280,height=720');
+        onClose();
+    };
+
+    return (
+        <div role="region" aria-label="Modo TV" className={cn('fixed inset-0 z-50 bg-background text-white overflow-hidden', !controlsVisible && 'cursor-none')}>
+            <TVDisplay />
+            <div className={cn('absolute top-0 inset-x-0 p-4 flex justify-between bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300', controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={toggleFullscreen}>
+                        <Maximize className="w-4 h-4" /> Pantalla completa
+                    </Button>
+                    <Button variant="outline" onClick={openExternal} title="Abrir en una ventana aparte para llevarla a la TV o a un segundo monitor">
+                        <ExternalLink className="w-4 h-4" /> Abrir en otra ventana
+                    </Button>
+                </div>
+                <Button variant="outline" onClick={onClose}>
+                    <X className="w-4 h-4" /> Salir (T)
                 </Button>
             </div>
+        </div>
+    );
+};
 
-            <div className="flex-1 grid grid-cols-12 gap-8 p-12 z-10">
-                {/* Left: Timer & Blinds (7 cols) */}
-                <div className="col-span-7 flex flex-col justify-center items-center space-y-16 relative">
-                    {/* Timer Ring Glow */}
-                    <div className="absolute w-[80vh] h-[80vh] bg-primary/5 rounded-full blur-3xl -z-10" />
+/**
+ * Ventana independiente (?view=tv) para una segunda pantalla. Solo lee: se sincroniza con la
+ * ventana principal a través de localStorage, sin escribir nada.
+ */
+export const TVWindow: React.FC = () => {
+    const gameState = useGameStore(s => s.gameState);
+    const controlsVisible = useIdleControls();
 
-                    <div className="text-[20vw] font-mono font-bold leading-none tracking-tighter text-white drop-shadow-[0_0_50px_rgba(255,255,255,0.4)] tabular-nums">
-                        {formatTime(timerSecondsRemaining)}
-                    </div>
+    useEffect(() => {
+        document.title = 'NexPulse · TV';
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === STORAGE_KEY) useGameStore.persist.rehydrate();
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+    }, []);
 
-                    <div className="text-center space-y-6">
-                        <div className="text-5xl text-gray-400 uppercase tracking-[0.3em] font-light">Ciegas</div>
-                        <div className="text-[8vw] font-black text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary drop-shadow-[0_0_30px_rgba(0,255,157,0.3)] leading-none">
-                            {currentLevel?.smallBlind.toLocaleString()} <span className="text-white/20">/</span> {currentLevel?.bigBlind.toLocaleString()}
-                        </div>
-                        {currentLevel?.ante > 0 && (
-                            <div className="text-6xl text-accent font-bold mt-4 drop-shadow-[0_0_20px_rgba(255,0,85,0.5)]">
-                                ANTE {currentLevel.ante}
-                            </div>
-                        )}
-                    </div>
+    const waiting = gameState !== 'active' && gameState !== 'paused' && gameState !== 'finished';
+
+    return (
+        <div className={cn('fixed inset-0 bg-background text-white overflow-hidden', !controlsVisible && 'cursor-none')} onDoubleClick={toggleFullscreen}>
+            {waiting ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-center">
+                    <Logo className="w-32 h-32" />
+                    <p className="text-2xl text-gray-400 tracking-widest uppercase">Esperando que empiece el torneo…</p>
                 </div>
-
-                {/* Right: Stats & Next Level (5 cols) */}
-                <div className="col-span-5 flex flex-col justify-center space-y-12 pl-12 border-l border-white/10 bg-black/20 backdrop-blur-sm rounded-r-3xl my-12 py-12">
-
-                    <div className="space-y-4">
-                        <h3 className="text-3xl text-gray-500 uppercase tracking-[0.2em]">Siguiente Nivel</h3>
-                        <div className="text-7xl font-bold text-gray-300">
-                            {nextLevel
-                                ? `${nextLevel.smallBlind.toLocaleString()} / ${nextLevel.bigBlind.toLocaleString()}`
-                                : 'Descanso / Fin'}
-                        </div>
-                    </div>
-
-                    <div className="h-px w-full bg-white/10" />
-
-                    <div className="space-y-4">
-                        <h3 className="text-3xl text-gray-500 uppercase tracking-[0.2em]">Bolsa de Premios</h3>
-                        <div className="text-8xl font-bold text-secondary drop-shadow-[0_0_20px_rgba(0,212,255,0.4)]">
-                            ${prizePool.toLocaleString()}
-                        </div>
-                    </div>
-
-                    <div className="h-px w-full bg-white/10" />
-
-                    <div className="grid grid-cols-2 gap-12">
-                        <div className="space-y-2">
-                            <h3 className="text-2xl text-gray-500 uppercase tracking-[0.2em]">Jugadores</h3>
-                            <div className="text-6xl font-bold text-white">
-                                <span className="text-primary">{activePlayers.length}</span>
-                                <span className="text-gray-600 mx-2">/</span>
-                                {players.length}
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-2xl text-gray-500 uppercase tracking-[0.2em]">Stack Promedio</h3>
-                            <div className="text-6xl font-bold text-white">
-                                {avgStack.toLocaleString()}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            ) : (
+                <TVDisplay />
+            )}
+            <div className={cn('absolute bottom-4 inset-x-0 flex justify-center transition-opacity duration-300', controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                <Button variant="outline" onClick={toggleFullscreen}>
+                    <Maximize className="w-4 h-4" /> Pantalla completa (o doble clic)
+                </Button>
             </div>
         </div>
     );
