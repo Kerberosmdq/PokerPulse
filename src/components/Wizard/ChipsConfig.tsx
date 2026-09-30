@@ -1,40 +1,16 @@
 import React, { useState } from 'react';
-import { Trash2, Plus, Calculator, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Trash2, Plus, Minus, Calculator, AlertTriangle, CheckCircle2, Lock, LockOpen, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
 import { NumberField } from '../ui/NumberField';
 import { PokerChip } from '../Dashboard/ChipList';
 import { formatChips } from '../../utils/tournament';
+import { distributeChips } from '../../utils/chips';
+import { cn } from '../../utils/cn';
 import type { ChipValue } from '../../types';
 
-// Cantidades objetivo por jugador, de la denominación menor a la mayor
-const TARGET_COUNTS = [10, 10, 6, 4, 2];
 // Un maletín típico trae ~100 fichas de cada color
 const TYPICAL_PER_COLOR = 100;
-
-/** Reparto sugerido: pocas fichas chicas para las ciegas y el resto en las grandes. */
-const suggestDistribution = (chips: ChipValue[], stack: number) => {
-    const sorted = chips.filter(c => c.value > 0).sort((a, b) => a.value - b.value);
-    if (sorted.length === 0) return { distribution: [], remainder: stack };
-
-    let remaining = stack;
-    const distribution = sorted.map((chip, i) => {
-        const isLast = i === sorted.length - 1;
-        const count = isLast
-            ? Math.floor(remaining / chip.value)
-            : Math.min(TARGET_COUNTS[i] ?? 2, Math.floor(remaining / chip.value));
-        remaining -= count * chip.value;
-        return { ...chip, count };
-    });
-
-    // Completar lo que falte con las denominaciones más chicas posibles
-    for (let i = distribution.length - 1; i >= 0 && remaining > 0; i--) {
-        const extra = Math.floor(remaining / distribution[i].value);
-        distribution[i].count += extra;
-        remaining -= extra * distribution[i].value;
-    }
-    return { distribution, remainder: remaining };
-};
 
 export const ChipsConfig: React.FC = () => {
     const chipValues = useGameStore(s => s.chipValues);
@@ -42,11 +18,21 @@ export const ChipsConfig: React.FC = () => {
     const registered = useGameStore(s => s.players.length);
     const { setChipValues, setTournamentSettings } = useGameStore.getState();
     const [playersCount, setPlayersCount] = useState(registered || 8);
+    // Cantidades que el usuario fijó a mano, por valor de ficha
+    const [locked, setLocked] = useState<Record<number, number>>({});
+
+    const setCount = (value: number, count: number) => setLocked(prev => ({ ...prev, [value]: Math.max(0, count) }));
+    const unlock = (value: number) => setLocked(prev => {
+        const next = { ...prev };
+        delete next[value];
+        return next;
+    });
 
     const update = (index: number, patch: Partial<ChipValue>) =>
         setChipValues(chipValues.map((chip, i) => (i === index ? { ...chip, ...patch } : chip)));
 
-    const { distribution, remainder } = suggestDistribution(chipValues, startingStack);
+    const { distribution, remainder, excess } = distributeChips(chipValues, startingStack, locked);
+    const hasLocks = distribution.some(d => d.locked);
     const duplicates = chipValues.filter((c, i) => c.value > 0 && chipValues.findIndex(o => o.value === c.value) !== i).length > 0;
 
     return (
@@ -110,10 +96,15 @@ export const ChipsConfig: React.FC = () => {
                         </label>
                     </div>
 
-                    {remainder > 0 ? (
+                    {excess > 0 ? (
                         <div className="bg-accent/10 border border-accent/30 p-3 rounded-lg flex items-start gap-2.5 text-xs text-accent">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>Con estas fichas no se llega exacto al stack: faltan <b className="font-mono">{formatChips(remainder)}</b>. Agregá una ficha de menor valor o ajustá el stack.</span>
+                            <span>Las cantidades fijas se pasan del stack por <b className="font-mono">{formatChips(excess)}</b>. Bajá alguna o subí el stack.</span>
+                        </div>
+                    ) : remainder > 0 ? (
+                        <div className="bg-accent/10 border border-accent/30 p-3 rounded-lg flex items-start gap-2.5 text-xs text-accent">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>Con estas fichas no se llega exacto al stack: faltan <b className="font-mono">{formatChips(remainder)}</b>. {hasLocks ? 'Soltá algún candado para que se recalcule, o ajustá las cantidades.' : 'Agregá una ficha de menor valor o ajustá el stack.'}</span>
                         </div>
                     ) : (
                         <div className="bg-primary/10 border border-primary/20 p-3 rounded-lg flex items-center gap-2.5 text-xs text-primary">
@@ -122,23 +113,63 @@ export const ChipsConfig: React.FC = () => {
                         </div>
                     )}
 
+                    <div className="flex items-center justify-between gap-2 -mb-1">
+                        <p className="text-[11px] text-gray-500">Tocá una cantidad para fijarla: las demás se recalculan solas.</p>
+                        {hasLocks && (
+                            <button onClick={() => setLocked({})} className="text-[10px] font-bold uppercase tracking-wider text-primary hover:underline flex items-center gap-1 shrink-0">
+                                <RotateCcw className="w-3 h-3" /> Automático
+                            </button>
+                        )}
+                    </div>
+
                     <div className="divide-y divide-white/5 bg-black/20 rounded-xl border border-white/5">
-                        {distribution.filter(d => d.count > 0).map((item) => {
+                        {distribution.map((item) => {
                             const physical = item.count * playersCount;
                             const tooMany = physical > TYPICAL_PER_COLOR;
                             return (
-                                <div key={`${item.color}-${item.value}`} className="p-3 flex items-center justify-between gap-3 text-sm">
-                                    <div className="flex items-center gap-3">
-                                        <PokerChip color={item.color} value={item.value} size={30} />
-                                        <div>
-                                            <div className="font-bold text-white">{item.count} × {formatChips(item.value)}</div>
-                                            <div className="text-[11px] text-gray-500 font-mono">= {formatChips(item.count * item.value)}</div>
-                                        </div>
+                                <div key={item.value} className={cn('p-3 flex items-center gap-3 text-sm', item.locked && 'bg-primary/[0.04]')}>
+                                    <PokerChip color={item.color} value={item.value} size={30} />
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => setCount(item.value, item.count - 1)}
+                                            disabled={item.count === 0}
+                                            aria-label={`Una ficha de ${item.value} menos`}
+                                            className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-gray-300 hover:bg-white/10 disabled:opacity-30"
+                                        >
+                                            <Minus className="w-3.5 h-3.5" />
+                                        </button>
+                                        <NumberField
+                                            aria-label={`Cantidad de fichas de ${item.value}`}
+                                            value={item.count}
+                                            onValueChange={(v) => setCount(item.value, v)}
+                                            max={999}
+                                            className={cn('w-14 h-8 text-center px-1 font-bold', item.locked && 'border-primary/50 text-primary')}
+                                        />
+                                        <button
+                                            onClick={() => setCount(item.value, item.count + 1)}
+                                            aria-label={`Una ficha de ${item.value} más`}
+                                            className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-gray-300 hover:bg-white/10"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                        </button>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="font-bold text-white">× {formatChips(item.value)}</div>
+                                        <div className="text-[11px] text-gray-500 font-mono">= {formatChips(item.count * item.value)}</div>
+                                    </div>
+                                    <div className="text-right shrink-0">
                                         <div className={`font-mono text-xs font-bold ${tooMany ? 'text-warning' : 'text-gray-400'}`}>{physical} en total</div>
-                                        {tooMany && <div className="text-[10px] text-warning">Más de {TYPICAL_PER_COLOR} de un color</div>}
+                                        {tooMany && <div className="text-[10px] text-warning">Más de {TYPICAL_PER_COLOR}</div>}
                                     </div>
+                                    <button
+                                        onClick={() => (item.locked ? unlock(item.value) : setCount(item.value, item.count))}
+                                        aria-label={item.locked ? `Soltar la cantidad de ${item.value} (se recalcula)` : `Fijar la cantidad de ${item.value}`}
+                                        title={item.locked ? 'Fija: tocá para que se recalcule sola' : 'Automática: tocá para fijarla'}
+                                        aria-pressed={item.locked}
+                                        className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors', item.locked ? 'text-primary bg-primary/10' : 'text-gray-600 hover:text-gray-300 hover:bg-white/5')}
+                                    >
+                                        {item.locked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
+                                    </button>
                                 </div>
                             );
                         })}
