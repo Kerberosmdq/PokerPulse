@@ -6,6 +6,7 @@ const BACKUP_FIELDS = [
     'blindsStructure', 'chipValues', 'players', 'currentLevelIndex', 'timerSecondsRemaining',
     'tournamentStartedAt', 'prizePool', 'payoutStructure', 'customPayouts', 'gameLog',
     'rebuyAmount', 'rebuyChips', 'addonAmount', 'addonChips',
+    'rakePercent', 'guaranteedPool', 'bountyAmount', 'rebuyUntilLevel', 'maxRebuys', 'addonUntilLevel', 'maxAddons',
 ] as const satisfies readonly (keyof PokerGameStore)[];
 
 export const exportTournamentData = (state: PokerGameStore) => {

@@ -5,9 +5,10 @@ import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import {
-    computePayouts, findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber,
-    getPayoutPercents, getTournamentStats, placeMedal, secondsUntilNextBreak,
+    findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber,
+    getTournamentStats, placeMedal, secondsUntilNextBreak,
 } from '../../utils/tournament';
+import { usePrizes } from '../../hooks/usePrizes';
 
 /**
  * Tiempo restante calculado localmente a partir de levelEndTime: la pantalla TV se ve fluida
@@ -63,11 +64,8 @@ export const TVDisplay: React.FC = () => {
     const blindsStructure = useGameStore(s => s.blindsStructure);
     const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
     const players = useGameStore(s => s.players);
-    const prizePool = useGameStore(s => s.prizePool);
     const isPaused = useGameStore(s => s.isPaused);
     const tournamentName = useGameStore(s => s.tournamentName);
-    const payoutStructure = useGameStore(s => s.payoutStructure);
-    const customPayouts = useGameStore(s => s.customPayouts);
     const remaining = useLiveRemaining();
 
     const level = blindsStructure[currentLevelIndex];
@@ -77,7 +75,8 @@ export const TVDisplay: React.FC = () => {
     const toBreak = secondsUntilNextBreak(blindsStructure, currentLevelIndex, remaining);
     const progress = level ? Math.min(1, Math.max(0, 1 - remaining / (level.duration * 60))) : 0;
     const isLastMinute = !isBreak && remaining <= 60 && remaining > 0;
-    const payouts = computePayouts(prizePool, getPayoutPercents(payoutStructure, customPayouts)).slice(0, 3);
+    const { breakdown, payouts: allPayouts } = usePrizes();
+    const payouts = allPayouts.slice(0, 3);
     const bbRef = isBreak ? nextPlaying?.bigBlind : level?.bigBlind;
 
     return (
@@ -147,7 +146,7 @@ export const TVDisplay: React.FC = () => {
                     </InfoBlock>
 
                     <InfoBlock label="Bolsa de premios">
-                        <span className="text-secondary">{formatMoney(prizePool)}</span>
+                        <span className="text-secondary">{formatMoney(breakdown.net)}</span>
                     </InfoBlock>
 
                     {payouts.length > 1 && (

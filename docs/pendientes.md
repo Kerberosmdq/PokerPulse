@@ -136,12 +136,12 @@ Este archivo registra todas las tareas y mejoras planificadas para el torneo de 
   - [x] Ranking histórico de jugadores (títulos, cobros, ganancias) y "copiar resultados".
   - [x] ID de anfitrión estable: los celulares se reconectan solos tras recargar.
 
-## 💡 Propuestas pendientes
+## ✅ Bloque 7: Propuestas implementadas (2026-09-30, rama `feature/propuestas-pendientes`)
 
-- [ ] Rake / comisión de la casa y dinero agregado (garantizado).
-- [ ] Bounties (recompensa por eliminar jugadores).
-- [ ] Límite de re-entradas (hasta el nivel X o N por jugador) y período de add-on.
-- [ ] Plantillas guardadas de estructuras de ciegas.
-- [ ] Balanceo de mesas durante el torneo (sugerir mover jugadores al quedar desparejas).
-- [ ] Code-splitting (el bundle principal pesa ~600 KB).
-- [ ] Tests automáticos para la lógica del reloj y el reparto de premios.
+- [x] **17. Comisión de la casa y pozo garantizado.** Porcentaje sobre el pozo (sin bounties) y garantizado que completa la casa; desglose visible en Premios.
+- [x] **18. Bounties.** Parte de cada entrada/re-entrada va a la cabeza del jugador; al eliminar se elige quién lo sacó (también desde el celular), con deshacer. Al finalizar, lo no cobrado va al campeón. Se guardan en el historial y suman al ranking.
+- [x] **19. Límites de re-entradas y add-ons.** Hasta qué nivel (incluye el descanso siguiente) y máximo por jugador. Los botones se deshabilitan mostrando el motivo, y el anfitrión rechaza pedidos del remoto que no cumplan.
+- [x] **20. Estructuras de ciegas guardadas.** Guardar con nombre, cargar y borrar desde el paso Ciegas.
+- [x] **21. Rebalanceo de mesas.** Aviso con los cambios sugeridos cuando las mesas quedan desparejas o sobra una; propone sortear la mesa final.
+- [x] **22. División del código.** Cada pantalla y modal se descarga al usarse; PeerJS solo con el control remoto. Carga inicial: de ~600 KB a ~360 KB.
+- [x] **23. Tests automáticos.** Vitest con 43 pruebas: reloj, pozo, bounties, reglas, premios, mesas y plantillas (`pnpm test`).

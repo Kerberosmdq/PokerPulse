@@ -1,12 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2, Coffee, MoreVertical, Search, X, History } from 'lucide-react';
+import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2, Coffee, MoreVertical, Search, X, History, Crosshair } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { toast } from '../../store/toastStore';
 import type { Player } from '../../types';
 import { Button } from '../ui/Button';
 import { NumberField } from '../ui/NumberField';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Modal } from '../ui/Modal';
+import { usePlayerRules } from '../../hooks/usePlayerRules';
 import { cn } from '../../utils/cn';
 import { formatChips, formatMoney, getStandings, playerSpent } from '../../utils/tournament';
 
@@ -16,7 +18,17 @@ export const PlayerList: React.FC = () => {
     const [query, setQuery] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [toDelete, setToDelete] = useState<Player | null>(null);
-    const { deletePlayer } = useGameStore.getState();
+    const [bustTarget, setBustTarget] = useState<Player | null>(null);
+    const bountyAmount = useGameStore(s => s.bountyAmount);
+    const { deletePlayer, bustPlayer, restorePlayer } = useGameStore.getState();
+
+    const bust = (player: Player, eliminatorId?: string) => {
+        const chips = player.chips;
+        bustPlayer(player.id, eliminatorId);
+        toast.warning(`${player.name} quedó afuera`, { label: 'Deshacer', onClick: () => restorePlayer(player.id, chips) });
+    };
+    // Con bounties hay que saber quién lo eliminó para pagarle
+    const requestBust = (player: Player) => (bountyAmount > 0 ? setBustTarget(player) : bust(player));
 
     const standings = useMemo(() => getStandings(players), [players]);
     const positionById = useMemo(() => new Map(standings.map(s => [s.player.id, s.position])), [standings]);
@@ -77,7 +89,7 @@ export const PlayerList: React.FC = () => {
                         >
                             {editingId === player.id
                                 ? <EditPlayerRow player={player} onDone={() => setEditingId(null)} />
-                                : <PlayerRow player={player} onEdit={() => setEditingId(player.id)} onDelete={() => setToDelete(player)} />}
+                                : <PlayerRow player={player} onEdit={() => setEditingId(player.id)} onDelete={() => setToDelete(player)} onBust={() => requestBust(player)} />}
                         </motion.div>
                     ))}
                 </AnimatePresence>
@@ -87,30 +99,7 @@ export const PlayerList: React.FC = () => {
                         <h4 className="text-gray-500 font-bold uppercase text-[10px] tracking-[0.2em] mb-2">Eliminados</h4>
                         <div className="space-y-1">
                             {bustedPlayers.map(player => (
-                                <div key={player.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-white/[0.03]">
-                                    <span className="font-mono text-[11px] text-gray-500 w-7 shrink-0">#{positionById.get(player.id)}</span>
-                                    <span className="text-gray-400 truncate flex-1">{player.name}</span>
-                                    <span className="text-gray-600 text-xs font-mono">{formatMoney(playerSpent(player))}</span>
-                                    <button
-                                        onClick={() => {
-                                            useGameStore.getState().rebuyPlayer(player.id);
-                                            toast.success(`Re-entrada de ${player.name}`);
-                                        }}
-                                        title="Re-entrada"
-                                        aria-label={`Re-entrada de ${player.name}`}
-                                        className="p-1.5 rounded-md text-secondary/70 hover:text-secondary hover:bg-secondary/10"
-                                    >
-                                        <RefreshCcw className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        onClick={() => setToDelete(player)}
-                                        title="Borrar del torneo"
-                                        aria-label={`Borrar a ${player.name}`}
-                                        className="p-1.5 rounded-md text-gray-600 hover:text-accent hover:bg-accent/10"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                <BustedRow key={player.id} player={player} position={positionById.get(player.id)} onDelete={() => setToDelete(player)} />
                             ))}
                         </div>
                     </div>
@@ -118,6 +107,16 @@ export const PlayerList: React.FC = () => {
             </div>
 
             <AnimatePresence>
+                {bustTarget && (
+                    <EliminatorPicker
+                        key="picker"
+                        player={bustTarget}
+                        candidates={players.filter(p => p.status !== 'busted' && p.id !== bustTarget.id)}
+                        bounty={bountyAmount}
+                        onPick={(eliminatorId) => { bust(bustTarget, eliminatorId); setBustTarget(null); }}
+                        onClose={() => setBustTarget(null)}
+                    />
+                )}
                 {toDelete && (
                     <ConfirmModal
                         title={`¿Borrar a ${toDelete.name}?`}
@@ -136,29 +135,25 @@ export const PlayerList: React.FC = () => {
     );
 };
 
-const ActionButton: React.FC<{ label: string; onClick: () => void; className?: string; active?: boolean; children: React.ReactNode }> = ({ label, onClick, className, active, children }) => (
+const ActionButton: React.FC<{ label: string; onClick: () => void; className?: string; active?: boolean; disabledReason?: string; children: React.ReactNode }> = ({ label, onClick, className, active, disabledReason, children }) => (
     <button
         type="button"
         onClick={onClick}
-        title={label}
-        aria-label={label}
+        disabled={!!disabledReason}
+        title={disabledReason ?? label}
+        aria-label={disabledReason ? `${label}: ${disabledReason}` : label}
         aria-pressed={active}
-        className={cn('h-8 w-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', className)}
+        className={cn('h-8 w-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent', className)}
     >
         {children}
     </button>
 );
 
-const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => void }> = ({ player, onEdit, onDelete }) => {
+const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => void; onBust: () => void }> = ({ player, onEdit, onDelete, onBust }) => {
     const [menuOpen, setMenuOpen] = useState(false);
-    const { rebuyPlayer, addonPlayer, bustPlayer, toggleAway, restorePlayer } = useGameStore.getState();
+    const { rebuyPlayer, addonPlayer, toggleAway } = useGameStore.getState();
+    const rules = usePlayerRules(player);
     const isAway = player.status === 'away';
-
-    const handleBust = () => {
-        const chips = player.chips;
-        bustPlayer(player.id);
-        toast.warning(`${player.name} quedó afuera`, { label: 'Deshacer', onClick: () => restorePlayer(player.id, chips) });
-    };
 
     return (
         <div className={cn(
@@ -176,6 +171,11 @@ const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => 
                         <span className="text-gray-500">{formatMoney(playerSpent(player))}</span>
                         {player.rebuys > 0 && <span className="text-secondary">{player.rebuys}R</span>}
                         {player.addons > 0 && <span className="text-accent">{player.addons}A</span>}
+                        {player.bountiesWon > 0 && (
+                            <span className="text-warning flex items-center gap-0.5" title={`Eliminó a ${player.bountiesWon} · cobró ${formatMoney(player.bountyEarnings)}`}>
+                                <Crosshair className="w-3 h-3" />{player.bountiesWon}
+                            </span>
+                        )}
                     </div>
                 </div>
                 {player.table !== undefined && (
@@ -186,16 +186,16 @@ const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => 
             </div>
 
             <div className="flex items-center gap-1 mt-2 -ml-1">
-                <ActionButton label="Re-entrada" onClick={() => { rebuyPlayer(player.id); toast.success(`Re-entrada de ${player.name}`); }} className="text-secondary hover:bg-secondary/10">
+                <ActionButton label="Re-entrada" disabledReason={rules.rebuy.reason} onClick={() => { rebuyPlayer(player.id); toast.success(`Re-entrada de ${player.name}`); }} className="text-secondary hover:bg-secondary/10">
                     <RefreshCcw className="w-4 h-4" />
                 </ActionButton>
-                <ActionButton label="Add-on" onClick={() => { addonPlayer(player.id); toast.success(`Add-on de ${player.name}`); }} className="text-accent hover:bg-accent/10">
+                <ActionButton label="Add-on" disabledReason={rules.addon.reason} onClick={() => { addonPlayer(player.id); toast.success(`Add-on de ${player.name}`); }} className="text-accent hover:bg-accent/10">
                     <Plus className="w-4 h-4" />
                 </ActionButton>
                 <ActionButton label={isAway ? 'Marcar presente' : 'Marcar ausente'} active={isAway} onClick={() => toggleAway(player.id)} className={isAway ? 'text-warning bg-warning/10' : 'text-gray-400 hover:text-warning hover:bg-warning/10'}>
                     <Coffee className="w-4 h-4" />
                 </ActionButton>
-                <ActionButton label="Eliminar (perdió sus fichas)" onClick={handleBust} className="text-gray-400 hover:text-accent hover:bg-accent/10">
+                <ActionButton label="Eliminar (perdió sus fichas)" onClick={onBust} className="text-gray-400 hover:text-accent hover:bg-accent/10">
                     <Skull className="w-4 h-4" />
                 </ActionButton>
 
@@ -359,3 +359,61 @@ const AddPlayerForm: React.FC = () => {
         </motion.div>
     );
 };
+
+const BustedRow: React.FC<{ player: Player; position?: number; onDelete: () => void }> = ({ player, position, onDelete }) => {
+    const rules = usePlayerRules(player);
+    return (
+        <div className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-white/[0.03]">
+            <span className="font-mono text-[11px] text-gray-500 w-7 shrink-0">#{position}</span>
+            <span className="text-gray-400 truncate flex-1">{player.name}</span>
+            <span className="text-gray-600 text-xs font-mono">{formatMoney(playerSpent(player))}</span>
+            <button
+                onClick={() => {
+                    useGameStore.getState().rebuyPlayer(player.id);
+                    toast.success(`Re-entrada de ${player.name}`);
+                }}
+                disabled={!rules.rebuy.allowed}
+                title={rules.rebuy.reason ?? 'Re-entrada'}
+                aria-label={`Re-entrada de ${player.name}`}
+                className="p-1.5 rounded-md text-secondary/70 hover:text-secondary hover:bg-secondary/10 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+                <RefreshCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+                onClick={onDelete}
+                title="Borrar del torneo"
+                aria-label={`Borrar a ${player.name}`}
+                className="p-1.5 rounded-md text-gray-600 hover:text-accent hover:bg-accent/10"
+            >
+                <Trash2 className="w-3.5 h-3.5" />
+            </button>
+        </div>
+    );
+};
+
+/** Con bounties: elegir quién eliminó al jugador (cobra el bounty). */
+const EliminatorPicker: React.FC<{ player: Player; candidates: Player[]; bounty: number; onPick: (id?: string) => void; onClose: () => void }> = ({ player, candidates, bounty, onPick, onClose }) => (
+    <Modal
+        onClose={onClose}
+        size="sm"
+        accent="danger"
+        title={`¿Quién eliminó a ${player.name}?`}
+        description={`Cobra el bounty de ${formatMoney(bounty)}.`}
+        icon={<Crosshair className="w-5 h-5 text-accent" />}
+    >
+        <div className="grid grid-cols-2 gap-2">
+            {candidates.map(c => (
+                <button
+                    key={c.id}
+                    onClick={() => onPick(c.id)}
+                    className="h-11 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-sm font-bold text-white hover:border-accent/60 hover:bg-accent/10 truncate"
+                >
+                    {c.name}
+                </button>
+            ))}
+        </div>
+        <button onClick={() => onPick(undefined)} className="w-full mt-3 h-10 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white hover:bg-white/5">
+            No lo sé / sin bounty
+        </button>
+    </Modal>
+);

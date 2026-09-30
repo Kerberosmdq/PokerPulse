@@ -16,7 +16,20 @@ export const saveHistory = (entries: TournamentHistoryEntry[]) => {
     else localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
 };
 
-export const saveHistoryEntry = (entry: TournamentHistoryEntry) => saveHistory([...loadHistory(), entry]);
+/** Guarda un torneo terminado; completa id, fecha y duración a partir de cuándo empezó. */
+export const saveHistoryEntry = (
+    entry: Omit<TournamentHistoryEntry, 'id' | 'timestamp' | 'date' | 'durationMinutes'>,
+    startedAt: number | null,
+) => {
+    const now = Date.now();
+    saveHistory([...loadHistory(), {
+        ...entry,
+        id: crypto.randomUUID(),
+        timestamp: now,
+        date: new Date(now).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        durationMinutes: startedAt ? Math.round((now - startedAt) / 60000) : undefined,
+    }]);
+};
 
 /** Más recientes primero (los registros viejos sin timestamp quedan en su orden original). */
 export const sortHistory = (entries: TournamentHistoryEntry[]) =>
@@ -27,17 +40,27 @@ export interface PlayerRecord {
     wins: number;
     cashes: number;
     winnings: number;
+    bounties: number;
 }
 
-/** Ranking histórico por jugador (solo se conocen los puestos pagos de cada torneo). */
+/** Ranking histórico por jugador: puestos pagos y bounties (las ganancias incluyen ambos). */
 export const getPlayerRecords = (entries: TournamentHistoryEntry[]): PlayerRecord[] => {
     const map = new Map<string, PlayerRecord>();
-    entries.forEach(t => t.winners.forEach(w => {
-        const r = map.get(w.name) ?? { name: w.name, wins: 0, cashes: 0, winnings: 0 };
-        r.cashes++;
-        r.winnings += w.prize;
-        if (w.position === 1) r.wins++;
-        map.set(w.name, r);
-    }));
+    const get = (name: string) => map.get(name) ?? { name, wins: 0, cashes: 0, winnings: 0, bounties: 0 };
+    entries.forEach(t => {
+        t.winners.forEach(w => {
+            const r = get(w.name);
+            r.cashes++;
+            r.winnings += w.prize;
+            if (w.position === 1) r.wins++;
+            map.set(w.name, r);
+        });
+        t.bounties?.forEach(b => {
+            const r = get(b.name);
+            r.bounties += b.amount;
+            r.winnings += b.amount;
+            map.set(b.name, r);
+        });
+    });
     return [...map.values()].sort((a, b) => b.winnings - a.winnings || b.wins - a.wins);
 };

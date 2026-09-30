@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Search, Skull, RefreshCw, Plus, Coffee, WifiOff, Loader2 } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Search, Skull, RefreshCw, Plus, Coffee, WifiOff, Loader2, Crosshair, X } from 'lucide-react';
 import { peerService, type RemoteAction, type RemoteSnapshot, type RemoteStatus } from '../../services/peerService';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import { findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber } from '../../utils/tournament';
+import { getAddonStatus, getRebuyStatus } from '../../utils/rules';
+
+const NO_RULES = { rebuyUntilLevel: 0, maxRebuys: 0, addonUntilLevel: 0, maxAddons: 0 };
 
 const hostIdFromUrl = () => new URLSearchParams(window.location.search).get('id');
 
@@ -16,6 +19,8 @@ export const RemoteClient: React.FC = () => {
     const [state, setState] = useState<RemoteSnapshot | null>(null);
     const [query, setQuery] = useState('');
     const [confirmBust, setConfirmBust] = useState<string | null>(null);
+    // Con bounties, tras confirmar se elige quién lo eliminó
+    const [bountyFor, setBountyFor] = useState<string | null>(null);
 
     useEffect(() => {
         document.title = 'NexPulse · Remoto';
@@ -127,7 +132,7 @@ export const RemoteClient: React.FC = () => {
             <div className="grid grid-cols-3 gap-2 text-center">
                 <MiniStat label="Próximo" value={next ? `${formatChips(next.smallBlind)}/${formatChips(next.bigBlind)}` : '—'} />
                 <MiniStat label="En juego" value={`${aliveCount}/${players.length}`} />
-                <MiniStat label="Pozo" value={formatMoney(prizePool)} className="text-primary" />
+                <MiniStat label="Premios" value={formatMoney(state.prizeNet ?? prizePool)} className="text-primary" />
             </div>
 
             {/* Jugadores */}
@@ -151,21 +156,25 @@ export const RemoteClient: React.FC = () => {
                     const isBusted = player.status === 'busted';
                     const isAway = player.status === 'away';
                     const confirming = confirmBust === player.id;
+                    const rules = state.rules ?? NO_RULES;
+                    const rebuy = getRebuyStatus(rules, blindsStructure, currentLevelIndex, player);
+                    const addon = getAddonStatus(rules, blindsStructure, currentLevelIndex, player);
                     return (
                         <div key={player.id} className={cn('p-3 rounded-xl border flex flex-col gap-2.5', isBusted ? 'border-white/5 opacity-50' : isAway ? 'border-warning/30 bg-warning/[0.04]' : 'border-white/10 bg-white/[0.02]')}>
                             <div className="min-w-0">
                                 <div className={cn('font-bold truncate', isBusted && 'line-through text-gray-400', isAway && 'text-warning')}>{player.name}</div>
                                 <div className="text-[11px] text-gray-500 font-mono">
                                     {isBusted ? 'Fuera de juego' : `${formatChips(player.chips)} fichas`} · R{player.rebuys} · A{player.addons}
+                                    {(player.bountiesWon ?? 0) > 0 && <span className="text-warning"> · 🎯{player.bountiesWon}</span>}
                                 </div>
                             </div>
                             <div className={cn('grid gap-2', isBusted ? 'grid-cols-1' : 'grid-cols-4')}>
-                                <IconAction label={`Re-entrada (${formatMoney(state.rebuyAmount)})`} disabled={!online} onClick={() => send({ action: 'REBUY', payload: { playerId: player.id } })} className="text-secondary border-secondary/30">
+                                <IconAction label={rebuy.reason ?? `Re-entrada (${formatMoney(state.rebuyAmount)})`} disabled={!online || !rebuy.allowed} onClick={() => send({ action: 'REBUY', payload: { playerId: player.id } })} className="text-secondary border-secondary/30">
                                     <RefreshCw className="w-4 h-4" />
                                 </IconAction>
                                 {!isBusted && (
                                     <>
-                                        <IconAction label={`Add-on (${formatMoney(state.addonAmount)})`} disabled={!online} onClick={() => send({ action: 'ADDON', payload: { playerId: player.id } })} className="text-accent border-accent/30">
+                                        <IconAction label={addon.reason ?? `Add-on (${formatMoney(state.addonAmount)})`} disabled={!online || !addon.allowed} onClick={() => send({ action: 'ADDON', payload: { playerId: player.id } })} className="text-accent border-accent/30">
                                             <Plus className="w-4 h-4" />
                                         </IconAction>
                                         <IconAction label={isAway ? 'Marcar presente' : 'Marcar ausente'} disabled={!online} onClick={() => send({ action: 'AWAY', payload: { playerId: player.id } })} className={isAway ? 'text-warning border-warning/50 bg-warning/10' : 'text-gray-400 border-white/10'}>
@@ -175,7 +184,8 @@ export const RemoteClient: React.FC = () => {
                                             disabled={!online}
                                             onClick={() => {
                                                 if (confirming) {
-                                                    send({ action: 'BUST', payload: { playerId: player.id } });
+                                                    if (state.bountyAmount > 0) setBountyFor(player.id);
+                                                    else send({ action: 'BUST', payload: { playerId: player.id } });
                                                     setConfirmBust(null);
                                                 } else {
                                                     setConfirmBust(player.id);
@@ -193,6 +203,37 @@ export const RemoteClient: React.FC = () => {
                     );
                 })}
             </div>
+
+            {bountyFor && (
+                <div className="fixed inset-0 z-30 bg-black/70 flex items-end" onClick={() => setBountyFor(null)}>
+                    <div className="w-full max-w-lg mx-auto bg-surface border-t border-white/10 rounded-t-3xl p-5 pb-8 space-y-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="font-black text-lg flex items-center gap-2"><Crosshair className="w-5 h-5 text-accent" /> ¿Quién lo eliminó?</h3>
+                                <p className="text-xs text-gray-400">{players.find(p => p.id === bountyFor)?.name} · bounty de {formatMoney(state.bountyAmount)}</p>
+                            </div>
+                            <button onClick={() => setBountyFor(null)} aria-label="Cancelar" className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto">
+                            {players.filter(p => p.status !== 'busted' && p.id !== bountyFor).map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => { send({ action: 'BUST', payload: { playerId: bountyFor, eliminatorId: p.id } }); setBountyFor(null); }}
+                                    className="h-12 px-3 rounded-xl border border-white/10 bg-white/[0.03] font-bold truncate active:bg-accent/20"
+                                >
+                                    {p.name}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => { send({ action: 'BUST', payload: { playerId: bountyFor } }); setBountyFor(null); }}
+                            className="w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-400 border border-white/10"
+                        >
+                            No lo sé / sin bounty
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -5,16 +5,14 @@ import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { PokerChip } from './ChipList';
-import { chipsToColorUp, computePayouts, findNextPlayingLevel, formatChips, formatMoney, formatTime, getPayoutPercents, getTournamentStats, ordinalPlace, placeMedal } from '../../utils/tournament';
+import { chipsToColorUp, findNextPlayingLevel, formatChips, formatMoney, formatTime, getTournamentStats, ordinalPlace, placeMedal } from '../../utils/tournament';
+import { usePrizes } from '../../hooks/usePrizes';
 
 const SLIDE_MS = 8000;
 
 export const BreakOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const timerSecondsRemaining = useGameStore(s => s.timerSecondsRemaining);
     const isPaused = useGameStore(s => s.isPaused);
-    const prizePool = useGameStore(s => s.prizePool);
-    const payoutStructure = useGameStore(s => s.payoutStructure);
-    const customPayouts = useGameStore(s => s.customPayouts);
     const players = useGameStore(s => s.players);
     const blindsStructure = useGameStore(s => s.blindsStructure);
     const chipValues = useGameStore(s => s.chipValues);
@@ -23,7 +21,7 @@ export const BreakOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
     const stats = getTournamentStats(players);
     const nextLevelInfo = findNextPlayingLevel(blindsStructure, currentLevelIndex);
-    const payouts = computePayouts(prizePool, getPayoutPercents(payoutStructure, customPayouts));
+    const { breakdown, payouts } = usePrizes();
     const colorUp = chipsToColorUp(chipValues, blindsStructure, currentLevelIndex);
 
     const slides = ['payouts', 'stats', 'next', ...(colorUp.length > 0 ? ['chiprace'] : [])];
@@ -107,7 +105,7 @@ export const BreakOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                         <AnimatePresence mode="wait">
                             {slide === 'payouts' && (
                                 <motion.div key="payouts" {...slideMotion} className="space-y-5">
-                                    <SlideHeader icon={<Trophy className="w-6 h-6" />} title="Bolsa de premios" tone="text-warning bg-warning/10" extra={<span className="text-3xl font-black text-warning tabular">{formatMoney(prizePool)}</span>} />
+                                    <SlideHeader icon={<Trophy className="w-6 h-6" />} title="Bolsa de premios" tone="text-warning bg-warning/10" extra={<span className="text-3xl font-black text-warning tabular">{formatMoney(breakdown.net)}</span>} />
                                     <div className="space-y-2">
                                         {payouts.slice(0, 5).map(p => (
                                             <div key={p.place} className="flex justify-between items-center bg-white/[0.02] border border-white/5 px-4 py-3 rounded-2xl">

@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { Wizard } from './components/Wizard/Wizard';
-import { Dashboard } from './components/Dashboard/Dashboard';
-import { RemoteClient } from './components/Remote/RemoteClient';
-import { LandingPage } from './components/Landing/LandingPage';
-import { TVWindow } from './components/Dashboard/TVMode';
+import { Logo } from './components/ui/Logo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/Toaster';
 import { soundManager } from './utils/audio';
+
+// Cada pantalla se descarga por separado: el celular (remoto) no baja el panel del anfitrión
+// y el anfitrión no baja PeerJS hasta que lo necesita
+const LandingPage = lazy(() => import('./components/Landing/LandingPage').then(m => ({ default: m.LandingPage })));
+const Wizard = lazy(() => import('./components/Wizard/Wizard').then(m => ({ default: m.Wizard })));
+const Dashboard = lazy(() => import('./components/Dashboard/Dashboard').then(m => ({ default: m.Dashboard })));
+const RemoteClient = lazy(() => import('./components/Remote/RemoteClient').then(m => ({ default: m.RemoteClient })));
+const TVWindow = lazy(() => import('./components/Dashboard/TVMode').then(m => ({ default: m.TVWindow })));
+
+const Loading = () => (
+  <div className="min-h-dvh flex items-center justify-center bg-background" aria-busy="true">
+    <Logo className="w-16 h-16 animate-pulse" />
+  </div>
+);
 
 type AppMode = 'host' | 'remote' | 'tv';
 
@@ -42,14 +52,14 @@ function App() {
   if (mode === 'remote') {
     return (
       <>
-        <RemoteClient />
+        <Suspense fallback={<Loading />}><RemoteClient /></Suspense>
         <Toaster />
       </>
     );
   }
 
   if (mode === 'tv') {
-    return <TVWindow />;
+    return <Suspense fallback={<Loading />}><TVWindow /></Suspense>;
   }
 
   return (
@@ -63,9 +73,11 @@ function App() {
         </div>
 
         <div className="relative z-10">
+          <Suspense fallback={<Loading />}>
           {gameState === 'landing' && <LandingPage />}
           {gameState === 'setup' && <Wizard />}
           {(gameState === 'active' || gameState === 'paused' || gameState === 'finished') && <Dashboard />}
+          </Suspense>
         </div>
         <Toaster />
       </div>

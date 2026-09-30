@@ -64,15 +64,44 @@ export const TournamentConfig: React.FC = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Costo"><NumberField value={s.rebuyAmount} onValueChange={(v) => set({ rebuyAmount: v })} prefix="$" /></Field>
                         <Field label="Fichas"><NumberField value={s.rebuyChips} onValueChange={(v) => set({ rebuyChips: v })} /></Field>
+                        <Field label="Hasta el nivel" hint={s.rebuyUntilLevel ? 'Incluye el descanso siguiente' : 'Sin límite'}>
+                            <NumberField value={s.rebuyUntilLevel} onValueChange={(v) => set({ rebuyUntilLevel: v })} max={99} />
+                        </Field>
+                        <Field label="Máx. por jugador" hint={s.maxRebuys ? undefined : 'Sin límite'}>
+                            <NumberField value={s.maxRebuys} onValueChange={(v) => set({ maxRebuys: v })} max={99} />
+                        </Field>
                     </div>
                 </Section>
                 <Section title="Add-on" description="Fichas extra que se compran estando en juego.">
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Costo"><NumberField value={s.addonAmount} onValueChange={(v) => set({ addonAmount: v })} prefix="$" /></Field>
                         <Field label="Fichas"><NumberField value={s.addonChips} onValueChange={(v) => set({ addonChips: v })} /></Field>
+                        <Field label="Hasta el nivel" hint={s.addonUntilLevel ? 'Incluye el descanso siguiente' : 'Sin límite'}>
+                            <NumberField value={s.addonUntilLevel} onValueChange={(v) => set({ addonUntilLevel: v })} max={99} />
+                        </Field>
+                        <Field label="Máx. por jugador" hint={s.maxAddons ? undefined : 'Sin límite'}>
+                            <NumberField value={s.maxAddons} onValueChange={(v) => set({ maxAddons: v })} max={99} />
+                        </Field>
                     </div>
                 </Section>
             </div>
+
+            <Section title="Pozo" description="Todo es opcional: dejá en 0 lo que no uses.">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Comisión de la casa (%)" hint="Para comida, fichas u organización">
+                        <NumberField value={s.rakePercent} onValueChange={(v) => set({ rakePercent: v })} max={50} />
+                    </Field>
+                    <Field label="Pozo garantizado" hint="Si no se llega, la casa pone la diferencia">
+                        <NumberField value={s.guaranteedPool} onValueChange={(v) => set({ guaranteedPool: v })} prefix="$" />
+                    </Field>
+                    <Field
+                        label="Bounty por cabeza"
+                        hint={s.bountyAmount ? `De cada entrada, $${s.bountyAmount} van a quien elimine al jugador` : 'Sin bounties'}
+                    >
+                        <NumberField value={s.bountyAmount} onValueChange={(v) => set({ bountyAmount: v })} max={Math.max(0, s.buyIn)} prefix="$" />
+                    </Field>
+                </div>
+            </Section>
 
             <Section title="Reparto de premios" description="Se puede cambiar durante el torneo desde Premios.">
                 <PayoutEditor />

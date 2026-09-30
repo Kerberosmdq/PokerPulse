@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Plus, Settings2, Sparkles, Coffee, RotateCcw, Clock } from 'lucide-react';
 import { INITIAL_BLINDS, useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
+import { BlindTemplates } from './BlindTemplates';
 import { NumberField } from '../ui/NumberField';
 import { cn } from '../../utils/cn';
 import { formatChips, getLevelNumber, totalStructureMinutes, validateBlindsStructure } from '../../utils/tournament';
@@ -176,6 +177,7 @@ export const BlindsConfig: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
+                    <BlindTemplates />
                     <div className="bg-surface-light/40 rounded-xl border border-white/10 overflow-x-auto">
                         <table className="w-full text-sm text-left min-w-[560px]">
                             <thead className="bg-white/5 text-gray-400 uppercase text-[10px] tracking-wider font-bold">

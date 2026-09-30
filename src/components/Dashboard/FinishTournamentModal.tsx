@@ -1,22 +1,21 @@
 import React, { useMemo, useState } from 'react';
-import { Trophy, AlertTriangle, Copy } from 'lucide-react';
+import { Trophy, AlertTriangle, Copy, Crosshair } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { toast } from '../../store/toastStore';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { computePayouts, formatMoney, getPayoutPercents, getStandings, getTournamentStats, ordinalPlace, placeMedal } from '../../utils/tournament';
+import { formatMoney, getStandings, getTournamentStats, ordinalPlace, placeMedal } from '../../utils/tournament';
+import { unclaimedBounties } from '../../utils/rules';
+import { usePrizes } from '../../hooks/usePrizes';
 import { saveHistoryEntry } from '../../utils/history';
 
 export const FinishTournamentModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const players = useGameStore(s => s.players);
-    const prizePool = useGameStore(s => s.prizePool);
-    const payoutStructure = useGameStore(s => s.payoutStructure);
-    const customPayouts = useGameStore(s => s.customPayouts);
     const tournamentName = useGameStore(s => s.tournamentName);
     const tournamentStartedAt = useGameStore(s => s.tournamentStartedAt);
 
-    const payouts = computePayouts(prizePool, getPayoutPercents(payoutStructure, customPayouts))
-        .slice(0, Math.max(1, players.length));
+    const { breakdown, payouts: allPayouts } = usePrizes();
+    const payouts = allPayouts.slice(0, Math.max(1, players.length));
     const standings = useMemo(() => getStandings(players), [players]);
     const stats = getTournamentStats(players);
 
@@ -28,10 +27,22 @@ export const FinishTournamentModal: React.FC<{ onClose: () => void }> = ({ onClo
         .map((p, i) => ({ position: p.place, name: nameOf(selected[i] ?? ''), prize: p.amount }))
         .filter(w => w.name);
 
+    // Bounties: lo que cobró cada uno, y lo que quedó sin cobrar (su propia cabeza y eliminaciones
+    // sin autor registrado) se lo lleva el campeón
+    const championId = selected[0];
+    const leftover = unclaimedBounties(players);
+    const bounties = players
+        .map(p => ({ name: p.name, amount: (p.bountyEarnings || 0) + (p.id === championId ? leftover : 0), count: p.bountiesWon || 0 }))
+        .filter(b => b.amount > 0)
+        .sort((a, b) => b.amount - a.amount);
+
     const summaryText = () => {
         const title = tournamentName || 'Torneo NexPulse';
         const lines = winners.map(w => `${placeMedal(w.position)} ${w.name} — ${formatMoney(w.prize)}`);
-        return `🏆 ${title}\nPozo: ${formatMoney(prizePool)} · ${stats.total} jugadores\n\n${lines.join('\n')}`;
+        const bountyLines = bounties.length > 0
+            ? `\n\n🎯 Bounties\n${bounties.map(b => `${b.name} — ${formatMoney(b.amount)}`).join('\n')}`
+            : '';
+        return `🏆 ${title}\nPremios: ${formatMoney(breakdown.net)} · ${stats.total} jugadores\n\n${lines.join('\n')}${bountyLines}`;
     };
 
     const handleCopy = async () => {
@@ -45,17 +56,15 @@ export const FinishTournamentModal: React.FC<{ onClose: () => void }> = ({ onClo
 
     const handleSave = () => {
         saveHistoryEntry({
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            date: new Date().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
             name: tournamentName || undefined,
-            prizePool,
+            prizePool: breakdown.net,
+            rake: breakdown.rake || undefined,
+            bounties: bounties.length > 0 ? bounties.map(({ name, amount }) => ({ name, amount })) : undefined,
             totalPlayers: players.length,
             rebuysCount: stats.rebuys,
             addonsCount: stats.addons,
-            durationMinutes: tournamentStartedAt ? Math.round((Date.now() - tournamentStartedAt) / 60000) : undefined,
             winners,
-        });
+        }, tournamentStartedAt);
         useGameStore.getState().resetGame();
         toast.success('Torneo guardado en el historial');
     };
@@ -71,8 +80,8 @@ export const FinishTournamentModal: React.FC<{ onClose: () => void }> = ({ onClo
         >
             <div className="grid grid-cols-3 gap-3 bg-black/30 p-4 rounded-xl border border-white/5 text-center">
                 <div>
-                    <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Pozo</span>
-                    <span className="text-sm font-bold text-primary font-mono">{formatMoney(prizePool)}</span>
+                    <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Premios</span>
+                    <span className="text-sm font-bold text-primary font-mono">{formatMoney(breakdown.net)}</span>
                 </div>
                 <div>
                     <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Jugadores</span>
@@ -111,6 +120,21 @@ export const FinishTournamentModal: React.FC<{ onClose: () => void }> = ({ onClo
                     );
                 })}
             </div>
+
+            {bounties.length > 0 && (
+                <div className="mt-5">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Crosshair className="w-3.5 h-3.5 text-accent" /> Bounties</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                        {bounties.map(b => (
+                            <div key={b.name} className="flex justify-between items-center bg-white/[0.02] border border-white/5 px-3 py-2 rounded-lg text-sm">
+                                <span className="truncate">{b.name} {b.count > 0 && <span className="text-[10px] text-gray-500">×{b.count}</span>}</span>
+                                <span className="font-mono font-bold text-accent">{formatMoney(b.amount)}</span>
+                            </div>
+                        ))}
+                    </div>
+                    {leftover > 0 && <p className="text-[11px] text-gray-500 mt-2">Incluye {formatMoney(leftover)} de bounties sin cobrar para el campeón.</p>}
+                </div>
+            )}
 
             <div className="bg-warning/5 border border-warning/20 p-3 rounded-lg flex items-start gap-2.5 text-xs text-warning/90 mt-5">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />

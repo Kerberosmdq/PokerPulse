@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
     Tv, QrCode, Shuffle, DollarSign, Coffee, Trophy, VolumeX, Volume1, Volume2, Download, Upload,
@@ -13,7 +13,7 @@ import { formatChips, formatMoney, formatTime, getTournamentStats } from '../../
 import { useKeyboardShortcuts, SHORTCUTS } from '../../hooks/useKeyboardShortcuts';
 import { useClockEngine } from '../../hooks/useClockEngine';
 import { useNow } from '../../hooks/useNow';
-import { peerService } from '../../services/peerService';
+import { usePrizes } from '../../hooks/usePrizes';
 import type { PokerGameStore } from '../../types';
 import { THEMES } from '../../utils/themes';
 import { Timer } from './Timer';
@@ -21,12 +21,8 @@ import { PlayerList } from './PlayerList';
 import { GameLog } from './GameLog';
 import { BlindsList } from './BlindsList';
 import { ChipList } from './ChipList';
-import { RemoteControlQR } from './RemoteControlQR';
-import { TVMode } from './TVMode';
-import { SeatingDraw } from './SeatingDraw';
-import { PrizePool } from './PrizePool';
-import { BreakOverlay } from './BreakOverlay';
-import { FinishTournamentModal } from './FinishTournamentModal';
+import { RebalanceBanner } from './RebalanceBanner';
+import { describeRebuyWindow } from '../../utils/rules';
 import { Button } from '../ui/Button';
 import { BrandMark } from '../ui/Logo';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -35,10 +31,19 @@ import { Dropdown, MenuItem, MenuLabel } from '../ui/Dropdown';
 
 type Overlay = 'remote' | 'tv' | 'seating' | 'prizes' | 'finish' | 'reset' | 'shortcuts' | null;
 
+// Pantallas que no hacen falta al abrir el panel: se descargan recién cuando se usan
+// (el control remoto arrastra PeerJS y el generador de QR)
+const RemoteControlQR = lazy(() => import('./RemoteControlQR').then(m => ({ default: m.RemoteControlQR })));
+const TVMode = lazy(() => import('./TVMode').then(m => ({ default: m.TVMode })));
+const SeatingDraw = lazy(() => import('./SeatingDraw').then(m => ({ default: m.SeatingDraw })));
+const PrizePool = lazy(() => import('./PrizePool').then(m => ({ default: m.PrizePool })));
+const BreakOverlay = lazy(() => import('./BreakOverlay').then(m => ({ default: m.BreakOverlay })));
+const FinishTournamentModal = lazy(() => import('./FinishTournamentModal').then(m => ({ default: m.FinishTournamentModal })));
+
 export const Dashboard: React.FC = () => {
     const [overlay, setOverlay] = useState<Overlay>(null);
     const [pendingImport, setPendingImport] = useState<Partial<PokerGameStore> | null>(null);
-    const [remoteDevices, setRemoteDevices] = useState(peerService.connectedCount);
+    const [remoteDevices, setRemoteDevices] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const blindsStructure = useGameStore(s => s.blindsStructure);
@@ -55,8 +60,18 @@ export const Dashboard: React.FC = () => {
     // Si el control remoto ya se usó en este dispositivo, volver a publicarlo al cargar: los
     // teléfonos se reconectan solos con el mismo enlace
     useEffect(() => {
-        if (peerService.hasHostHistory()) peerService.initializeHost(() => { });
-        return peerService.onConnectionsChange(setRemoteDevices);
+        let cancelled = false;
+        let unsubscribe: (() => void) | undefined;
+        import('../../services/peerService').then(({ peerService }) => {
+            if (cancelled) return;
+            if (peerService.hasHostHistory()) peerService.initializeHost(() => { });
+            setRemoteDevices(peerService.connectedCount);
+            unsubscribe = peerService.onConnectionsChange(setRemoteDevices);
+        });
+        return () => {
+            cancelled = true;
+            unsubscribe?.();
+        };
     }, []);
 
     const isBreak = blindsStructure[currentLevelIndex]?.type === 'break';
@@ -82,10 +97,10 @@ export const Dashboard: React.FC = () => {
     return (
         <div className="min-h-screen lg:h-dvh flex flex-col lg:overflow-hidden">
             <AnimatePresence>
-                {overlay === 'remote' && <RemoteControlQR key="remote" onClose={close} />}
-                {overlay === 'seating' && <SeatingDraw key="seating" onClose={close} />}
-                {overlay === 'prizes' && <PrizePool key="prizes" onClose={close} />}
-                {overlay === 'finish' && <FinishTournamentModal key="finish" onClose={close} />}
+                {overlay === 'remote' && <Suspense key="remote" fallback={null}><RemoteControlQR onClose={close} /></Suspense>}
+                {overlay === 'seating' && <Suspense key="seating" fallback={null}><SeatingDraw onClose={close} /></Suspense>}
+                {overlay === 'prizes' && <Suspense key="prizes" fallback={null}><PrizePool onClose={close} /></Suspense>}
+                {overlay === 'finish' && <Suspense key="finish" fallback={null}><FinishTournamentModal onClose={close} /></Suspense>}
                 {overlay === 'shortcuts' && <ShortcutsHelp key="shortcuts" onClose={close} />}
                 {overlay === 'reset' && (
                     <ConfirmModal
@@ -112,9 +127,9 @@ export const Dashboard: React.FC = () => {
                         onCancel={() => setPendingImport(null)}
                     />
                 )}
-                {showBreakOverlay && <BreakOverlay key="break" onClose={() => setDismissedBreakIndex(currentLevelIndex)} />}
+                {showBreakOverlay && <Suspense key="break" fallback={null}><BreakOverlay onClose={() => setDismissedBreakIndex(currentLevelIndex)} /></Suspense>}
             </AnimatePresence>
-            {overlay === 'tv' && <TVMode onClose={close} />}
+            {overlay === 'tv' && <Suspense fallback={null}><TVMode onClose={close} /></Suspense>}
 
             <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
 
@@ -169,6 +184,8 @@ export const Dashboard: React.FC = () => {
                 </div>
             )}
 
+            {!champion && <RebalanceBanner onOpenSeating={() => setOverlay('seating')} />}
+
             {/* Contenido */}
             <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 p-4 lg:p-6">
                 <section className="lg:col-span-3 glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-[420px] lg:min-h-0 order-2 lg:order-1" aria-label="Jugadores">
@@ -209,7 +226,7 @@ export const Dashboard: React.FC = () => {
 
 const StatsBar: React.FC = () => {
     const players = useGameStore(s => s.players);
-    const prizePool = useGameStore(s => s.prizePool);
+    const { breakdown } = usePrizes();
     const tournamentStartedAt = useGameStore(s => s.tournamentStartedAt);
     const blindsStructure = useGameStore(s => s.blindsStructure);
     const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
@@ -217,14 +234,26 @@ const StatsBar: React.FC = () => {
 
     const stats = getTournamentStats(players);
     const level = blindsStructure[currentLevelIndex];
+    const rebuyUntilLevel = useGameStore(s => s.rebuyUntilLevel);
+    const rebuyWindow = describeRebuyWindow({ rebuyUntilLevel, maxRebuys: 0, addonUntilLevel: 0, maxAddons: 0 }, blindsStructure, currentLevelIndex);
     const bb = level?.type === 'level' ? level.bigBlind : blindsStructure.slice(currentLevelIndex).find(l => l.type === 'level')?.bigBlind;
     const elapsed = tournamentStartedAt ? Math.max(0, Math.floor((now - tournamentStartedAt) / 1000)) : 0;
 
     const items = [
-        { label: 'Pozo', value: formatMoney(prizePool), className: 'text-primary' },
+        {
+            label: 'Premios',
+            value: formatMoney(breakdown.net),
+            className: 'text-primary',
+            hint: breakdown.net !== breakdown.gross ? `de ${formatMoney(breakdown.gross)}` : undefined,
+        },
         { label: 'En juego', value: `${stats.alive} / ${stats.total}` },
         { label: 'Stack promedio', value: formatChips(stats.avgStack), hint: bb && stats.avgStack ? `${Math.round(stats.avgStack / bb)} BB` : undefined },
-        { label: 'Re-entradas · Add-ons', value: `${stats.rebuys} · ${stats.addons}`, className: 'text-secondary' },
+        {
+            label: 'Re-entradas · Add-ons',
+            value: `${stats.rebuys} · ${stats.addons}`,
+            className: 'text-secondary',
+            hint: rebuyWindow ? (rebuyWindow.open ? `hasta niv. ${rebuyUntilLevel}` : 'cerradas') : undefined,
+        },
         { label: 'Tiempo jugado', value: tournamentStartedAt ? formatTime(elapsed) : '—' },
     ];
 

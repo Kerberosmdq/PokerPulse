@@ -1,11 +1,12 @@
 import Peer, { type DataConnection } from 'peerjs';
 import { useGameStore } from '../store/gameStore';
 import { toast } from '../store/toastStore';
-import type { BlindLevel, PokerGameStore, Player, ThemeId } from '../types';
+import type { BlindLevel, PokerGameStore, Player, ThemeId, TournamentSettings } from '../types';
+import { getAddonStatus, getPoolBreakdown, getRebuyStatus } from '../utils/rules';
 
 /** Estado que el anfitrión comparte con los controles remotos. */
 export interface RemoteSnapshot {
-    players: Pick<Player, 'id' | 'name' | 'chips' | 'status' | 'rebuys' | 'addons'>[];
+    players: Pick<Player, 'id' | 'name' | 'chips' | 'status' | 'rebuys' | 'addons' | 'bountiesWon'>[];
     blindsStructure: BlindLevel[];
     currentLevelIndex: number;
     timerSecondsRemaining: number;
@@ -16,12 +17,17 @@ export interface RemoteSnapshot {
     addonAmount: number;
     tournamentName: string;
     theme: ThemeId;
+    /** Premios a repartir (sin bounties ni comisión) */
+    prizeNet: number;
+    bountyAmount: number;
+    rules: Pick<TournamentSettings, 'rebuyUntilLevel' | 'maxRebuys' | 'addonUntilLevel' | 'maxAddons'>;
 }
 
 export type RemoteAction =
     | { action: 'PAUSE' | 'PLAY' | 'NEXT_LEVEL' | 'PREV_LEVEL' }
     | { action: 'ADJUST_TIMER'; payload: { seconds: number } }
-    | { action: 'REBUY' | 'ADDON' | 'BUST' | 'AWAY'; payload: { playerId: string } }
+    | { action: 'REBUY' | 'ADDON' | 'AWAY'; payload: { playerId: string } }
+    | { action: 'BUST'; payload: { playerId: string; eliminatorId?: string } }
     | { action: 'STATE_UPDATE'; payload: RemoteSnapshot };
 
 export type RemoteStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
@@ -34,7 +40,7 @@ const MAX_RETRIES = 8;
 const randomHostId = () => `nexpulse-${crypto.randomUUID().slice(0, 8)}`;
 
 const snapshot = (s: PokerGameStore): RemoteSnapshot => ({
-    players: s.players.map(({ id, name, chips, status, rebuys, addons }) => ({ id, name, chips, status, rebuys, addons })),
+    players: s.players.map(({ id, name, chips, status, rebuys, addons, bountiesWon }) => ({ id, name, chips, status, rebuys, addons, bountiesWon })),
     blindsStructure: s.blindsStructure,
     currentLevelIndex: s.currentLevelIndex,
     timerSecondsRemaining: s.timerSecondsRemaining,
@@ -45,6 +51,9 @@ const snapshot = (s: PokerGameStore): RemoteSnapshot => ({
     addonAmount: s.addonAmount,
     tournamentName: s.tournamentName,
     theme: s.theme,
+    prizeNet: getPoolBreakdown(s).net,
+    bountyAmount: s.bountyAmount,
+    rules: { rebuyUntilLevel: s.rebuyUntilLevel, maxRebuys: s.maxRebuys, addonUntilLevel: s.addonUntilLevel, maxAddons: s.maxAddons },
 });
 
 class PeerService {
@@ -181,7 +190,12 @@ class PeerService {
                 break;
             case 'REBUY': {
                 const player = findPlayer(data.payload?.playerId);
-                if (player) {
+                if (!player) break;
+                // Las reglas se validan en el anfitrión: el remoto no puede saltearlas
+                const status = getRebuyStatus(store, store.blindsStructure, store.currentLevelIndex, player);
+                if (!status.allowed) {
+                    toast.warning(`📱 Re-entrada rechazada: ${status.reason}`);
+                } else {
                     store.rebuyPlayer(player.id);
                     toast.success(`📱 Re-entrada de ${player.name}`);
                 }
@@ -189,7 +203,11 @@ class PeerService {
             }
             case 'ADDON': {
                 const player = findPlayer(data.payload?.playerId);
-                if (player) {
+                if (!player) break;
+                const status = getAddonStatus(store, store.blindsStructure, store.currentLevelIndex, player);
+                if (!status.allowed) {
+                    toast.warning(`📱 Add-on rechazado: ${status.reason}`);
+                } else {
                     store.addonPlayer(player.id);
                     toast.success(`📱 Add-on de ${player.name}`);
                 }
@@ -199,7 +217,7 @@ class PeerService {
                 const player = findPlayer(data.payload?.playerId);
                 if (player && player.status !== 'busted') {
                     const chips = player.chips;
-                    store.bustPlayer(player.id);
+                    store.bustPlayer(player.id, findPlayer(data.payload?.eliminatorId)?.id);
                     toast.warning(`📱 ${player.name} quedó afuera`, { label: 'Deshacer', onClick: () => store.restorePlayer(player.id, chips) });
                 }
                 break;

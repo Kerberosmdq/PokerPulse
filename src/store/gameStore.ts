@@ -35,6 +35,13 @@ export const DEFAULT_SETTINGS: TournamentSettings = {
     addonAmount: 100,
     addonChips: 10000,
     seatsPerTable: 9,
+    rakePercent: 0,
+    guaranteedPool: 0,
+    bountyAmount: 0,
+    rebuyUntilLevel: 0,
+    maxRebuys: 0,
+    addonUntilLevel: 0,
+    maxAddons: 0,
 };
 
 // Tope para extender un nivel con +1m (evita valores absurdos)
@@ -78,6 +85,7 @@ export const useGameStore = create<PokerGameStore>()(
             isMuted: false,
             voiceEnabled: true,
             customPayouts: [50, 30, 20],
+            blindTemplates: [],
             ...DEFAULT_SETTINGS,
 
             setTheme: (theme) => set({ theme }),
@@ -91,6 +99,7 @@ export const useGameStore = create<PokerGameStore>()(
             addPlayer: (name, initialStack, buyIn) => {
                 const stack = initialStack ?? get().startingStack;
                 const entry = buyIn ?? get().buyIn;
+                const bounty = Math.min(get().bountyAmount, entry);
                 const newPlayer: Player = {
                     id: crypto.randomUUID(),
                     name,
@@ -98,6 +107,9 @@ export const useGameStore = create<PokerGameStore>()(
                     buyInAmount: entry,
                     rebuyTotal: 0,
                     addonTotal: 0,
+                    bountyPaid: bounty,
+                    bountiesWon: 0,
+                    bountyEarnings: 0,
                     status: 'active',
                     rebuys: 0,
                     addons: 0,
@@ -144,6 +156,8 @@ export const useGameStore = create<PokerGameStore>()(
 
                 const finalCost = cost ?? get().rebuyAmount;
                 const finalChips = chips ?? get().rebuyChips;
+                // Cada re-entrada vuelve a poner precio a su cabeza
+                const bounty = Math.min(get().bountyAmount, finalCost);
 
                 set((state) => ({
                     players: state.players.map((p) =>
@@ -151,6 +165,9 @@ export const useGameStore = create<PokerGameStore>()(
                             ...p,
                             rebuys: p.rebuys + 1,
                             rebuyTotal: (p.rebuyTotal || 0) + finalCost,
+                            bountyPaid: (p.bountyPaid || 0) + bounty,
+                            bustedBy: undefined,
+                            bountyCollected: undefined,
                             status: 'active',
                             bustedAt: undefined,
                             chips: p.chips + finalChips
@@ -182,15 +199,25 @@ export const useGameStore = create<PokerGameStore>()(
                 }));
             },
 
-            bustPlayer: (id) => {
-                const player = get().players.find((p) => p.id === id);
+            bustPlayer: (id, eliminatorId) => {
+                const { players, bountyAmount } = get();
+                const player = players.find((p) => p.id === id);
                 if (!player || player.status === 'busted') return;
 
-                const remaining = get().players.filter(p => p.status !== 'busted').length;
+                const remaining = players.filter(p => p.status !== 'busted').length;
+                const eliminator = eliminatorId && eliminatorId !== id
+                    ? players.find(p => p.id === eliminatorId && p.status !== 'busted')
+                    : undefined;
+                const bounty = eliminator && bountyAmount > 0 ? bountyAmount : 0;
+                const byWhom = eliminator ? ` (lo eliminó ${eliminator.name}${bounty ? `, cobra $${bounty}` : ''})` : '';
 
                 set((state) => ({
-                    players: state.players.map((p) => (p.id === id ? { ...p, status: 'busted', chips: 0, bustedAt: Date.now() } : p)),
-                    gameLog: [...state.gameLog, logEntry('BUST_OUT', `${player.name} quedó afuera en el puesto ${remaining}.`)],
+                    players: state.players.map((p) => {
+                        if (p.id === id) return { ...p, status: 'busted', chips: 0, bustedAt: Date.now(), bustedBy: eliminator?.id, bountyCollected: bounty || undefined };
+                        if (eliminator && p.id === eliminator.id) return { ...p, bountiesWon: (p.bountiesWon || 0) + 1, bountyEarnings: (p.bountyEarnings || 0) + bounty };
+                        return p;
+                    }),
+                    gameLog: [...state.gameLog, logEntry('BUST_OUT', `${player.name} quedó afuera en el puesto ${remaining}${byWhom}.`)],
                 }));
             },
 
@@ -198,8 +225,16 @@ export const useGameStore = create<PokerGameStore>()(
                 const player = get().players.find((p) => p.id === id);
                 if (!player) return;
 
+                // Si alguien cobró el bounty de esta eliminación, se le descuenta
+                const bounty = player.bountyCollected ?? 0;
                 set((state) => ({
-                    players: state.players.map((p) => (p.id === id ? { ...p, status: 'active', chips, bustedAt: undefined } : p)),
+                    players: state.players.map((p) => {
+                        if (p.id === id) return { ...p, status: 'active', chips, bustedAt: undefined, bustedBy: undefined, bountyCollected: undefined };
+                        if (player.bustedBy && p.id === player.bustedBy) {
+                            return { ...p, bountiesWon: Math.max(0, (p.bountiesWon || 0) - 1), bountyEarnings: Math.max(0, (p.bountyEarnings || 0) - bounty) };
+                        }
+                        return p;
+                    }),
                     gameLog: [...state.gameLog, logEntry('RESTORE', `Se deshizo la eliminación de ${player.name}.`)],
                 }));
             },
@@ -220,6 +255,43 @@ export const useGameStore = create<PokerGameStore>()(
                     gameLog: [...state.gameLog, logEntry('SEATING', `Sorteo de asientos realizado (${seats.length} jugadores).`)],
                 }));
             },
+
+            moveSeats: (moves) => {
+                if (moves.length === 0) return;
+                const byId = new Map(moves.map(m => [m.id, m]));
+                const names = moves.map(m => {
+                    const p = get().players.find(x => x.id === m.id);
+                    return `${p?.name ?? '?'} → mesa ${m.table}, asiento ${m.seat}`;
+                });
+                set((state) => ({
+                    players: state.players.map(p => {
+                        const m = byId.get(p.id);
+                        return m ? { ...p, table: m.table, seat: m.seat } : p;
+                    }),
+                    gameLog: [...state.gameLog, logEntry('SEATING', `Cambio de mesa: ${names.join('; ')}.`)],
+                }));
+            },
+
+            saveBlindTemplate: (name) => {
+                const clean = name.trim();
+                if (!clean) return;
+                const levels = get().blindsStructure.map(l => ({ ...l }));
+                set((state) => ({
+                    // Mismo nombre = se reemplaza
+                    blindTemplates: [
+                        ...state.blindTemplates.filter(t => t.name.toLowerCase() !== clean.toLowerCase()),
+                        { id: crypto.randomUUID(), name: clean, levels, createdAt: Date.now() },
+                    ],
+                }));
+            },
+
+            loadBlindTemplate: (id) => {
+                const template = get().blindTemplates.find(t => t.id === id);
+                if (!template) return;
+                get().setBlindsStructure(template.levels.map(l => ({ ...l, id: crypto.randomUUID() })));
+            },
+
+            deleteBlindTemplate: (id) => set((state) => ({ blindTemplates: state.blindTemplates.filter(t => t.id !== id) })),
 
             setBlindsStructure: (levels) => {
                 const { currentLevelIndex, isPaused } = get();
@@ -388,7 +460,7 @@ export const useGameStore = create<PokerGameStore>()(
         }),
         {
             name: STORAGE_KEY,
-            version: 2,
+            version: 3,
             storage: createJSONStorage(() => localStorage),
             migrate: (persisted, version) => {
                 const state = persisted as Partial<PokerGameStore>;
@@ -402,13 +474,15 @@ export const useGameStore = create<PokerGameStore>()(
                         addonTotal: p.addonTotal ?? (p.addons || 0) * addonAmount,
                     }));
                 }
+                // v3 agrega campos de bounties por jugador: normalizarlos siempre
+                state.players = (state.players ?? []).map(normalizePlayer);
                 return state as PokerGameStore;
             },
         }
     )
 );
 
-function normalizePlayer(p: Partial<Player>): Player {
+export function normalizePlayer(p: Partial<Player>): Player {
     return {
         id: p.id ?? crypto.randomUUID(),
         name: p.name ?? 'Jugador',
@@ -416,6 +490,11 @@ function normalizePlayer(p: Partial<Player>): Player {
         buyInAmount: p.buyInAmount ?? 0,
         rebuyTotal: p.rebuyTotal ?? 0,
         addonTotal: p.addonTotal ?? 0,
+        bountyPaid: p.bountyPaid ?? 0,
+        bountiesWon: p.bountiesWon ?? 0,
+        bountyEarnings: p.bountyEarnings ?? 0,
+        bustedBy: p.bustedBy,
+        bountyCollected: p.bountyCollected,
         status: p.status ?? 'active',
         rebuys: p.rebuys ?? 0,
         addons: p.addons ?? 0,

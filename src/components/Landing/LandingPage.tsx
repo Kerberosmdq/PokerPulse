@@ -150,7 +150,10 @@ export const LandingPage: React.FC = () => {
                                             </span>
                                             <span className="text-right font-mono text-warning">{r.wins}</span>
                                             <span className="text-right font-mono text-gray-300">{r.cashes}</span>
-                                            <span className="text-right font-mono font-bold text-primary">{formatMoney(r.winnings)}</span>
+                                            <span className="text-right font-mono font-bold text-primary">
+                                                {formatMoney(r.winnings)}
+                                                {r.bounties > 0 && <span className="block text-[10px] font-normal text-accent" title="Incluido en el total">🎯 {formatMoney(r.bounties)}</span>}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>

@@ -7,25 +7,10 @@ import type { Player } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../utils/cn';
-import { shuffle } from '../../utils/tournament';
+import { drawSeats, type Seat as SeatOf } from '../../utils/tables';
 import { soundManager } from '../../utils/audio';
 
-interface Seat { player: Player; table: number; seat: number }
-
-/**
- * Reparte a los jugadores en la menor cantidad de mesas posible y equilibradas (la diferencia
- * entre mesas es de a lo sumo un jugador).
- */
-const drawSeats = (players: Player[], seatsPerTable: number): Seat[] => {
-    const tables = Math.max(1, Math.ceil(players.length / seatsPerTable));
-    const byTable: Player[][] = Array.from({ length: tables }, () => []);
-    shuffle(players).forEach((p, i) => byTable[i % tables].push(p));
-    return byTable.flatMap((list, t) => {
-        // Asientos al azar dentro de la mesa (no siempre 1..n seguidos)
-        const seatNumbers = shuffle(Array.from({ length: seatsPerTable }, (_, i) => i + 1)).slice(0, list.length).sort((a, b) => a - b);
-        return shuffle(list).map((player, i) => ({ player, table: t + 1, seat: seatNumbers[i] }));
-    });
-};
+type Seat = SeatOf<Player>;
 
 export const SeatingDraw: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const players = useGameStore(s => s.players);

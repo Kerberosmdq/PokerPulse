@@ -3,7 +3,8 @@ import { DollarSign, Minus, Plus } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../utils/cn';
-import { computePayouts, formatMoney, getPayoutPercents, getTournamentStats, ordinalPlace, PAYOUT_PRESETS, placeMedal } from '../../utils/tournament';
+import { formatMoney, getTournamentStats, ordinalPlace, PAYOUT_PRESETS, placeMedal } from '../../utils/tournament';
+import { usePrizes } from '../../hooks/usePrizes';
 import type { PayoutStructure } from '../../types';
 
 const MAX_PLACES = 10;
@@ -94,21 +95,30 @@ export const PayoutEditor: React.FC = () => {
 };
 
 export const PrizePool: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const prizePool = useGameStore(s => s.prizePool);
     const players = useGameStore(s => s.players);
-    const payoutStructure = useGameStore(s => s.payoutStructure);
-    const customPayouts = useGameStore(s => s.customPayouts);
-    const payouts = computePayouts(prizePool, getPayoutPercents(payoutStructure, customPayouts));
+    const rakePercent = useGameStore(s => s.rakePercent);
+    const { breakdown, payouts } = usePrizes();
     const stats = getTournamentStats(players);
+    const hasExtras = breakdown.bounties > 0 || breakdown.rake > 0 || breakdown.added > 0;
 
     return (
         <Modal onClose={onClose} size="md" title="Bolsa de premios" accent="primary" icon={<DollarSign className="w-5 h-5 text-primary" />}>
             <div className="text-center py-2">
-                <div className="text-5xl font-black text-primary tabular text-glow">{formatMoney(prizePool)}</div>
+                <div className="text-5xl font-black text-primary tabular text-glow">{formatMoney(breakdown.net)}</div>
                 <div className="text-xs text-gray-500 mt-2">
                     {stats.total} entradas · {stats.rebuys} re-entradas · {stats.addons} add-ons
                 </div>
             </div>
+
+            {hasExtras && (
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-black/20 border border-white/5 rounded-xl px-4 py-3">
+                    <dt className="text-gray-500">Recaudado</dt><dd className="text-right font-mono text-gray-200">{formatMoney(breakdown.gross)}</dd>
+                    {breakdown.bounties > 0 && <><dt className="text-gray-500">Bounties (aparte)</dt><dd className="text-right font-mono text-accent">−{formatMoney(breakdown.bounties)}</dd></>}
+                    {breakdown.rake > 0 && <><dt className="text-gray-500">Comisión ({rakePercent}%)</dt><dd className="text-right font-mono text-accent">−{formatMoney(breakdown.rake)}</dd></>}
+                    {breakdown.added > 0 && <><dt className="text-gray-500">Agrega la casa (garantizado)</dt><dd className="text-right font-mono text-primary">+{formatMoney(breakdown.added)}</dd></>}
+                    <dt className="text-gray-300 font-bold border-t border-white/10 pt-1">Para premios</dt><dd className="text-right font-mono font-bold text-primary border-t border-white/10 pt-1">{formatMoney(breakdown.net)}</dd>
+                </dl>
+            )}
 
             <div className="mt-4">
                 <PayoutEditor />
