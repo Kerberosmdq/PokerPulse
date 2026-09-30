@@ -188,39 +188,95 @@ export const Dashboard: React.FC = () => {
 
             {/* Contenido */}
             <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 p-4 lg:p-6">
-                <section className="lg:col-span-3 glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-[420px] lg:min-h-0 order-2 lg:order-1" aria-label="Jugadores">
+                <section className="lg:col-span-4 2xl:col-span-3 glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-[420px] lg:min-h-0 order-2 lg:order-1" aria-label="Jugadores">
                     <PlayerList />
                 </section>
 
-                <section className="lg:col-span-6 flex flex-col gap-4 lg:gap-5 min-h-0 order-1 lg:order-2">
-                    <div className="flex-1 glass-panel rounded-2xl p-5 lg:p-6 flex items-center justify-center overflow-y-auto min-h-0">
+                {/* Centro: reloj (ocupa el alto libre) y franja de fichas siempre visible */}
+                <section className="lg:col-span-5 2xl:col-span-6 flex flex-col gap-4 lg:gap-5 min-h-0 order-1 lg:order-2">
+                    <div className="flex-1 glass-panel rounded-2xl p-5 lg:p-6 flex justify-center min-h-0 lg:overflow-hidden">
                         <Timer />
+                    </div>
+                    <div className="@container shrink-0 glass-panel rounded-2xl px-4 py-2.5">
+                        <div className="flex flex-col items-center gap-2 @min-[680px]:flex-row @min-[680px]:gap-3">
+                        <h3 className="text-accent font-bold uppercase text-xs tracking-[0.2em] flex items-center gap-2 shrink-0">
+                            <span className="w-2 h-2 bg-accent rounded-full" /> Fichas
+                        </h3>
+                        <div className="flex-1 min-w-0">
+                            <ChipList />
+                        </div>
+                        </div>
                     </div>
                 </section>
 
-                <section className="lg:col-span-3 flex flex-col gap-4 lg:gap-5 min-h-0 order-3">
-                    <div className="glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-0 lg:flex-[3]">
-                        <h3 className="text-secondary font-bold mb-3 uppercase text-xs tracking-[0.2em] flex items-center gap-2">
-                            <span className="w-2 h-2 bg-secondary rounded-full" /> Ciegas
-                        </h3>
-                        <div data-scroll-container className="relative flex-1 overflow-y-auto -mx-1 px-1 max-h-80 lg:max-h-none">
-                            <BlindsList />
-                        </div>
-                    </div>
-                    <div className="glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-0 lg:flex-[2] lg:max-h-fit">
-                        <h3 className="text-accent font-bold mb-3 uppercase text-xs tracking-[0.2em] flex items-center gap-2">
-                            <span className="w-2 h-2 bg-accent rounded-full" /> Fichas
-                        </h3>
-                        <div className="flex-1 overflow-y-auto">
-                            <ChipList />
-                        </div>
-                    </div>
-                    <div className="h-56 lg:h-auto glass-panel rounded-2xl p-4 flex flex-col min-h-0 lg:flex-[2]">
-                        <GameLog />
-                    </div>
+                {/* Derecha: ciegas con todo el alto; el registro en otra pestaña */}
+                <section className="lg:col-span-3 glass-panel rounded-2xl p-4 lg:p-5 flex flex-col min-h-[360px] max-h-[70vh] lg:max-h-none lg:min-h-0 order-3">
+                    <SidePanel />
                 </section>
             </main>
         </div>
+    );
+};
+
+type SideTab = 'blinds' | 'log';
+const SIDE_TAB_KEY = 'nexpulse-side-tab';
+
+const readSideTab = (): SideTab => {
+    try {
+        return localStorage.getItem(SIDE_TAB_KEY) === 'log' ? 'log' : 'blinds';
+    } catch {
+        return 'blinds';
+    }
+};
+
+const SidePanel: React.FC = () => {
+    const [tab, setTab] = useState<SideTab>(readSideTab);
+    const logCount = useGameStore(s => s.gameLog.length);
+
+    const select = (next: SideTab) => {
+        setTab(next);
+        try {
+            localStorage.setItem(SIDE_TAB_KEY, next);
+        } catch {
+            /* Preferencia opcional */
+        }
+    };
+
+    const tabs: { id: SideTab; label: string; dot: string; extra?: React.ReactNode }[] = [
+        { id: 'blinds', label: 'Ciegas', dot: 'bg-secondary' },
+        { id: 'log', label: 'Registro', dot: 'bg-gray-400', extra: logCount > 0 ? <span className="font-mono text-[10px] text-gray-500 tracking-normal">{logCount}</span> : null },
+    ];
+
+    return (
+        <>
+            <div role="tablist" aria-label="Panel lateral" className="flex gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-3 shrink-0">
+                {tabs.map(t => (
+                    <button
+                        key={t.id}
+                        role="tab"
+                        aria-selected={tab === t.id}
+                        onClick={() => select(t.id)}
+                        className={cn(
+                            'flex-1 h-8 rounded-lg text-xs font-bold uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-colors',
+                            tab === t.id ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-200'
+                        )}
+                    >
+                        <span className={cn('w-1.5 h-1.5 rounded-full', t.dot, tab !== t.id && 'opacity-50')} />
+                        {t.label}
+                        {t.extra}
+                    </button>
+                ))}
+            </div>
+            <div role="tabpanel" className="flex-1 min-h-0 flex flex-col">
+                {tab === 'blinds' ? (
+                    <div data-scroll-container className="relative flex-1 overflow-y-auto -mx-1 px-1 min-h-0">
+                        <BlindsList />
+                    </div>
+                ) : (
+                    <GameLog hideTitle />
+                )}
+            </div>
+        </>
     );
 };
 

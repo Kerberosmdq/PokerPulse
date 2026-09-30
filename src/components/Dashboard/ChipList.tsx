@@ -29,24 +29,31 @@ export const ChipList: React.FC = () => {
     const sortedChips = [...chipValues].filter(c => c.value > 0).sort((a, b) => a.value - b.value);
     const obsolete = new Set(chipsToColorUp(chipValues, blindsStructure, currentLevelIndex).map(c => c.value));
 
+    // Franja horizontal: con muchas denominaciones se achican para no pasar de dos filas
+    const many = sortedChips.length > 7;
+
     return (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
             {sortedChips.map((chip) => {
                 const retire = obsolete.has(chip.value);
                 return (
                     <div
                         key={`${chip.color}-${chip.value}`}
-                        className={cn('flex items-center gap-3 p-2.5 rounded-xl border', retire ? 'border-dashed border-white/10 opacity-50' : 'bg-surface-light/30 border-white/5')}
+                        className={cn(
+                            'flex items-center gap-2 rounded-full border pl-1 pr-3 py-1',
+                            retire ? 'border-dashed border-white/10 opacity-45' : 'bg-surface-light/40 border-white/5'
+                        )}
                         title={retire ? 'Ya no hace falta: se puede retirar en el próximo descanso' : undefined}
                     >
-                        <PokerChip color={chip.color} value={chip.value} size={36} />
-                        <div className="min-w-0">
-                            <div className="font-bold text-white font-mono tabular">{formatChips(chip.value)}</div>
+                        <PokerChip color={chip.color} value={chip.value} size={many ? 26 : 32} />
+                        <div className="leading-tight">
+                            <div className={cn('font-bold text-white font-mono tabular', many ? 'text-xs' : 'text-sm')}>{formatChips(chip.value)}</div>
                             {retire && <div className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">Retirar</div>}
                         </div>
                     </div>
                 );
             })}
+            {sortedChips.length === 0 && <span className="text-xs text-gray-500">Sin fichas configuradas</span>}
         </div>
     );
 };

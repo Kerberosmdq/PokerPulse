@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2, Coffee, MoreVertical, Search, X, History, Crosshair } from 'lucide-react';
+import { Plus, RefreshCcw, Skull, UserPlus, Pencil, Trash2, Coffee, MoreVertical, Search, X, History, Crosshair, Users } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { toast } from '../../store/toastStore';
 import type { Player } from '../../types';
@@ -70,11 +70,14 @@ export const PlayerList: React.FC = () => {
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 -mr-1 min-h-0">
-                {players.length === 0 && !isAdding && (
-                    <div className="text-center py-10 text-sm text-gray-500">
-                        Todavía no hay jugadores.
-                        <button onClick={() => setIsAdding(true)} className="block mx-auto mt-2 text-primary font-bold hover:underline">Agregar el primero</button>
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 -mr-1 min-h-0">
+                {players.length === 0 && (
+                    <div className="h-full min-h-40 flex flex-col items-center justify-center text-center gap-2 text-gray-500 px-4">
+                        <Users className="w-10 h-10 opacity-30" />
+                        <p className="text-sm">Todavía no hay jugadores anotados.</p>
+                        {isAdding
+                            ? <p className="text-xs text-gray-600">Escribí un nombre arriba y apretá Enter para anotar a varios seguidos.</p>
+                            : <button onClick={() => setIsAdding(true)} className="text-primary text-sm font-bold hover:underline">Agregar el primero</button>}
                     </div>
                 )}
 
@@ -156,17 +159,23 @@ const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => 
     const isAway = player.status === 'away';
 
     return (
+        // Contenedor de consulta: con lugar, nombre y acciones van en una sola línea
         <div className={cn(
-            'rounded-xl p-3 border transition-colors',
+            '@container rounded-xl px-3 py-2 border transition-colors',
             isAway ? 'bg-warning/[0.04] border-warning/25' : 'bg-surface-light/60 border-white/[0.04] hover:border-white/10'
         )}>
-            <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                    <div className={cn('font-bold truncate flex items-center gap-2', isAway ? 'text-warning' : 'text-white')}>
+            <div className="flex flex-col gap-1.5 @min-[300px]:flex-row @min-[300px]:items-center @min-[300px]:gap-2">
+                <div className="min-w-0 flex-1">
+                    <div className={cn('font-bold flex items-center gap-2 min-w-0', isAway ? 'text-warning' : 'text-white')}>
                         <span className="truncate">{player.name}</span>
                         {isAway && <span className="text-[9px] font-black bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded tracking-widest uppercase shrink-0">Ausente</span>}
+                        {player.table !== undefined && (
+                            <span className="text-[10px] font-mono font-normal text-gray-400 bg-black/30 border border-white/5 px-1.5 py-0.5 rounded shrink-0" title={`Mesa ${player.table}, asiento ${player.seat}`}>
+                                M{player.table}·A{player.seat}
+                            </span>
+                        )}
                     </div>
-                    <div className="text-xs flex items-center gap-2 mt-0.5 font-mono">
+                    <div className="text-xs flex items-center gap-2 font-mono">
                         <span className="text-primary">{formatChips(player.chips)}</span>
                         <span className="text-gray-500">{formatMoney(playerSpent(player))}</span>
                         {player.rebuys > 0 && <span className="text-secondary">{player.rebuys}R</span>}
@@ -178,41 +187,35 @@ const PlayerRow: React.FC<{ player: Player; onEdit: () => void; onDelete: () => 
                         )}
                     </div>
                 </div>
-                {player.table !== undefined && (
-                    <span className="text-[10px] font-mono text-gray-400 bg-black/30 border border-white/5 px-1.5 py-0.5 rounded shrink-0" title={`Mesa ${player.table}, asiento ${player.seat}`}>
-                        M{player.table}·A{player.seat}
-                    </span>
-                )}
-            </div>
 
-            <div className="flex items-center gap-1 mt-2 -ml-1">
-                <ActionButton label="Re-entrada" disabledReason={rules.rebuy.reason} onClick={() => { rebuyPlayer(player.id); toast.success(`Re-entrada de ${player.name}`); }} className="text-secondary hover:bg-secondary/10">
-                    <RefreshCcw className="w-4 h-4" />
-                </ActionButton>
-                <ActionButton label="Add-on" disabledReason={rules.addon.reason} onClick={() => { addonPlayer(player.id); toast.success(`Add-on de ${player.name}`); }} className="text-accent hover:bg-accent/10">
-                    <Plus className="w-4 h-4" />
-                </ActionButton>
-                <ActionButton label={isAway ? 'Marcar presente' : 'Marcar ausente'} active={isAway} onClick={() => toggleAway(player.id)} className={isAway ? 'text-warning bg-warning/10' : 'text-gray-400 hover:text-warning hover:bg-warning/10'}>
-                    <Coffee className="w-4 h-4" />
-                </ActionButton>
-                <ActionButton label="Eliminar (perdió sus fichas)" onClick={onBust} className="text-gray-400 hover:text-accent hover:bg-accent/10">
-                    <Skull className="w-4 h-4" />
-                </ActionButton>
-
-                <div className="ml-auto flex items-center gap-1">
-                    {menuOpen && (
-                        <>
-                            <ActionButton label="Editar" onClick={() => { setMenuOpen(false); onEdit(); }} className="text-gray-300 hover:bg-white/10">
-                                <Pencil className="w-3.5 h-3.5" />
-                            </ActionButton>
-                            <ActionButton label="Borrar del torneo" onClick={() => { setMenuOpen(false); onDelete(); }} className="text-accent/80 hover:text-accent hover:bg-accent/10">
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </ActionButton>
-                        </>
-                    )}
-                    <ActionButton label={menuOpen ? 'Menos opciones' : 'Más opciones'} active={menuOpen} onClick={() => setMenuOpen(!menuOpen)} className={menuOpen ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}>
-                        <MoreVertical className="w-4 h-4" />
+                <div className="flex items-center gap-0.5 shrink-0 -ml-1 @min-[300px]:ml-0">
+                    <ActionButton label="Re-entrada" disabledReason={rules.rebuy.reason} onClick={() => { rebuyPlayer(player.id); toast.success(`Re-entrada de ${player.name}`); }} className="text-secondary hover:bg-secondary/10">
+                        <RefreshCcw className="w-4 h-4" />
                     </ActionButton>
+                    <ActionButton label="Add-on" disabledReason={rules.addon.reason} onClick={() => { addonPlayer(player.id); toast.success(`Add-on de ${player.name}`); }} className="text-accent hover:bg-accent/10">
+                        <Plus className="w-4 h-4" />
+                    </ActionButton>
+                    <ActionButton label={isAway ? 'Marcar presente' : 'Marcar ausente'} active={isAway} onClick={() => toggleAway(player.id)} className={isAway ? 'text-warning bg-warning/10' : 'text-gray-400 hover:text-warning hover:bg-warning/10'}>
+                        <Coffee className="w-4 h-4" />
+                    </ActionButton>
+                    <ActionButton label="Eliminar (perdió sus fichas)" onClick={onBust} className="text-gray-400 hover:text-accent hover:bg-accent/10">
+                        <Skull className="w-4 h-4" />
+                    </ActionButton>
+                    <div className="ml-auto @min-[300px]:ml-0 flex items-center gap-0.5">
+                        {menuOpen && (
+                            <>
+                                <ActionButton label="Editar" onClick={() => { setMenuOpen(false); onEdit(); }} className="text-gray-300 hover:bg-white/10">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                </ActionButton>
+                                <ActionButton label="Borrar del torneo" onClick={() => { setMenuOpen(false); onDelete(); }} className="text-accent/80 hover:text-accent hover:bg-accent/10">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </ActionButton>
+                            </>
+                        )}
+                        <ActionButton label={menuOpen ? 'Menos opciones' : 'Más opciones'} active={menuOpen} onClick={() => setMenuOpen(!menuOpen)} className={menuOpen ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}>
+                            <MoreVertical className="w-4 h-4" />
+                        </ActionButton>
+                    </div>
                 </div>
             </div>
         </div>

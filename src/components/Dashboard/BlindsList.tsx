@@ -18,7 +18,7 @@ export const BlindsList: React.FC = () => {
     }, [currentLevelIndex]);
 
     return (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
             {blindsStructure.map((level, index) => {
                 const isCurrent = index === currentLevelIndex;
                 const isPast = index < currentLevelIndex;
@@ -30,7 +30,7 @@ export const BlindsList: React.FC = () => {
                         ref={isCurrent ? currentRef : undefined}
                         aria-current={isCurrent ? 'step' : undefined}
                         className={cn(
-                            'flex justify-between items-center px-2.5 py-2 rounded-lg text-sm border border-transparent',
+                            'flex justify-between items-center px-2.5 py-1.5 rounded-lg text-sm border border-transparent',
                             isCurrent && !isBreak && 'bg-primary/15 border-primary/60 text-white',
                             isCurrent && isBreak && 'bg-warning/15 border-warning/60 text-warning',
                             !isCurrent && isPast && 'text-gray-600',

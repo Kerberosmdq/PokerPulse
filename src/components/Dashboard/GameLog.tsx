@@ -17,7 +17,7 @@ const ACTION_COLORS: Record<string, string> = {
 // Eventos del reloj que ensucian el registro sin aportar
 const HIDDEN_ACTIONS = new Set(['TIMER_START', 'TIMER_PAUSE']);
 
-export const GameLog: React.FC = () => {
+export const GameLog: React.FC<{ hideTitle?: boolean }> = ({ hideTitle }) => {
     const gameLog = useGameStore(s => s.gameLog);
     const scrollRef = useRef<HTMLDivElement>(null);
     const visible = gameLog.filter(e => !HIDDEN_ACTIONS.has(e.action));
@@ -38,8 +38,8 @@ export const GameLog: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col min-h-0">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-gray-500 font-bold uppercase text-xs tracking-[0.2em]">Registro</h3>
+            <div className={hideTitle ? "flex justify-end items-center mb-2 min-h-4" : "flex justify-between items-center mb-3"}>
+                {!hideTitle && <h3 className="text-gray-500 font-bold uppercase text-xs tracking-[0.2em]">Registro</h3>}
                 {gameLog.length > 0 && (
                     <button onClick={handleCopy} className="text-[10px] text-gray-500 hover:text-white uppercase tracking-wider font-bold flex items-center gap-1">
                         <Copy className="w-3 h-3" /> Copiar
