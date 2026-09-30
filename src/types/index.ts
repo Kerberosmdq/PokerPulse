@@ -142,6 +142,8 @@ export interface PokerGameStore extends TournamentSettings {
     importState: (data: Partial<PokerGameStore>) => void;
     resetGame: () => void;
     clearPlayerHistory: () => void;
+    removeFromPlayerHistory: (name: string) => void;
+    setPlayerHistory: (names: string[]) => void;
     setVolume: (volume: number) => void;
     toggleMute: () => void;
     toggleVoice: () => void;

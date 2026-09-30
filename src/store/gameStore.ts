@@ -443,6 +443,10 @@ export const useGameStore = create<PokerGameStore>()(
 
             clearPlayerHistory: () => set({ playerHistory: [] }),
 
+            removeFromPlayerHistory: (name) => set((state) => ({ playerHistory: state.playerHistory.filter(n => n !== name) })),
+
+            setPlayerHistory: (names) => set({ playerHistory: [...new Set(names)].sort((a, b) => a.localeCompare(b)) }),
+
             setVolume: (volume) => {
                 set({ volume });
                 if (!get().isMuted) soundManager.setVolume(volume);

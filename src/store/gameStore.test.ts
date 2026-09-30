@@ -176,3 +176,17 @@ describe('cambios de mesa', () => {
         expect(store().gameLog.at(-1)?.description).toMatch(/Ana → mesa 2, asiento 4/);
     });
 });
+
+describe('jugadores habituales', () => {
+    it('se puede quitar un nombre y restaurar la lista', () => {
+        store().addPlayer('Ana');
+        store().addPlayer('Prueba');
+        const before = store().playerHistory;
+        store().removeFromPlayerHistory('Prueba');
+        expect(store().playerHistory).toEqual(['Ana']);
+        // Quitar de habituales no borra al jugador anotado
+        expect(byName('Prueba')).toBeDefined();
+        store().setPlayerHistory(before);
+        expect(store().playerHistory).toEqual(['Ana', 'Prueba']);
+    });
+});

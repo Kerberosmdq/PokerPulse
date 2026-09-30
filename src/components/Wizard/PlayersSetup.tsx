@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Plus, X, Users } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
+import { RegularPlayers } from './RegularPlayers';
 import { formatChips, formatMoney } from '../../utils/tournament';
 
 /** Inscripción rápida antes de empezar (también se puede anotar gente durante el torneo). */
@@ -58,18 +59,7 @@ export const PlayersSetup: React.FC = () => {
             </form>
             {isDuplicate && <p className="text-xs text-accent -mt-3">Ya está anotado.</p>}
 
-            {available.length > 0 && (
-                <div>
-                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Jugadores habituales</div>
-                    <div className="flex flex-wrap gap-2">
-                        {available.map(n => (
-                            <button key={n} onClick={() => add(n)} className="text-sm px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:border-primary/60 hover:text-white transition-colors">
-                                + {n}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <RegularPlayers available={available} onAdd={add} />
 
             <div className="bg-black/20 border border-white/5 rounded-2xl p-4 min-h-32">
                 {players.length === 0 ? (
