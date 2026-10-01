@@ -1,30 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Grid3x3, BookOpen, Info, Sparkles, Users } from 'lucide-react';
+import { Grid3x3, BookOpen, Info, Sparkles, Trophy, Users } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import { HandGrid } from './HandGrid';
 import { Chip, ControlRow, PlayersStepper } from './GuideControls';
 import { AssistantTab } from './AssistantTab';
 import { RivalsTab } from './RivalsTab';
+import { PracticeTab } from './PracticeTab';
 import { useRivalNotes } from '../../hooks/useRivalNotes';
 import { HandCards } from './PlayingCards';
 import { MiniTable } from './MiniTable';
 import { ACTION_ORDER, ACTION_STYLE, pillStyle } from './actionStyles';
-import { advise, buildChart, SITUATION_INFO, STACK_INFO, type Action, type Situation, type StackDepth } from '../../poker/advisor';
+import { advise, buildChart, SITUATION_INFO, STACK_INFO, type Action, type Situation, type Spot, type StackDepth } from '../../poker/advisor';
 import { handLabel, handName, parseRange, rangePercent, comboCount, TOTAL_COMBOS, type HandKey } from '../../poker/cards';
 import { POSITION_INFO, positionsForTable, preflopOrder, type PositionGroup, type PositionId } from '../../poker/positions';
 import { OPEN_RAISE } from '../../poker/ranges';
 
-// "Ayuda" incluye las posiciones (así entran 4 pestañas en el celular)
-type Tab = 'assistant' | 'chart' | 'rivals' | 'howto';
+// "Ayuda" incluye las posiciones (así entran las pestañas en el celular)
+type Tab = 'assistant' | 'chart' | 'practice' | 'rivals' | 'howto';
 
 const TAB_KEY = 'nexpulse-guide-tab';
-const TABS: Tab[] = ['assistant', 'chart', 'rivals', 'howto'];
+const TABS: Tab[] = ['assistant', 'chart', 'practice', 'rivals', 'howto'];
 
 /** Pestaña inicial: la del link (?tab=tabla) o la última que usó; si no, el asistente. */
 const initialTab = (): Tab => {
     const fromUrl = new URLSearchParams(window.location.search).get('tab');
-    const aliases: Record<string, Tab> = { asistente: 'assistant', tabla: 'chart', rivales: 'rivals', posiciones: 'howto', ayuda: 'howto' };
+    const aliases: Record<string, Tab> = { asistente: 'assistant', tabla: 'chart', practica: 'practice', rivales: 'rivals', posiciones: 'howto', ayuda: 'howto' };
     if (fromUrl && aliases[fromUrl]) return aliases[fromUrl];
     try {
         const saved = localStorage.getItem(TAB_KEY);
@@ -107,6 +108,14 @@ export const GuidePage: React.FC<{
         return next;
     });
 
+    // Desde la práctica: abrir la tabla con la misma situación de la pregunta
+    const openSpot = (spot: Spot) => {
+        update({ players: spot.players, position: spot.position, situation: spot.situation, stack: spot.stack, raiser: spot.raiser ?? 'middle' });
+        setSelected(null);
+        setTab('chart');
+        window.scrollTo({ top: 0 });
+    };
+
     const openPosition = (position: PositionId) => {
         update({ position, situation: 'unopened' });
         setTab('chart');
@@ -125,8 +134,8 @@ export const GuidePage: React.FC<{
                     </header>
                 )}
 
-                <nav role="tablist" aria-label="Secciones" className="grid grid-cols-4 gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-5">
-                    {([['assistant', 'Asistente', Sparkles], ['chart', 'Tabla', Grid3x3], ['rivals', 'Rivales', Users], ['howto', 'Ayuda', BookOpen]] as const).map(([id, label, Icon]) => (
+                <nav role="tablist" aria-label="Secciones" className="grid grid-cols-5 gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-5">
+                    {([['assistant', 'Asistente', Sparkles], ['chart', 'Tabla', Grid3x3], ['practice', 'Práctica', Trophy], ['rivals', 'Rivales', Users], ['howto', 'Ayuda', BookOpen]] as const).map(([id, label, Icon]) => (
                         <button
                             key={id}
                             role="tab"
@@ -144,6 +153,7 @@ export const GuidePage: React.FC<{
 
                 {tab === 'assistant' && <AssistantTab bigBlinds={bigBlinds} rivals={rivals} rivalNames={rivalNames} />}
                 {tab === 'chart' && <ChartTab settings={settings} update={update} selected={selected} onSelect={setSelected} />}
+                {tab === 'practice' && <PracticeTab onOpenChart={openSpot} />}
                 {tab === 'rivals' && <RivalsTab rivals={rivals} tablePlayers={tablePlayers} />}
                 {tab === 'howto' && (
                     <div className="space-y-5">

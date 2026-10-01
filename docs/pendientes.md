@@ -165,7 +165,7 @@ Este archivo registra todas las tareas y mejoras planificadas para el torneo de 
 - [x] **26. Asistente de mano.** Mini-mesa (jugadores, tu asiento, dealer), cartas en 1 toque, situación en 1 toque y respuesta grande con el "¿por qué?".
 - [x] **27. QR de jugadores.** Dos QR (organizador / jugadores), vista de jugador con reloj, ciegas y sus fichas en BB, y permisos validados en la computadora.
 - [x] **28. Notas privadas de rivales** que ajustan el consejo.
-- [ ] **29. Modo práctica.** Juego de preguntas con puntos y rachas para aprender entre manos.
+- [x] **29. Modo práctica.** Rondas de 10 manos con 3 dificultades, puntos, bonus por racha, récords y repaso de errores con acceso directo a la tabla.
 
 **Fases futuras:**
 - [ ] **Después del flop:** qué juego tenés en la mesa (pareja, proyectos de color o escalera), cuántas cartas te sirven ("outs"), probabilidad de ligar y si conviene pagar según el tamaño del pozo.
