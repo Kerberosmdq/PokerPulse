@@ -1,17 +1,36 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, Grid3x3, Armchair, BookOpen, Info } from 'lucide-react';
+import { Grid3x3, Armchair, BookOpen, Info, Sparkles } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import { HandGrid } from './HandGrid';
+import { Chip, ControlRow, PlayersStepper } from './GuideControls';
+import { AssistantTab } from './AssistantTab';
 import { HandCards } from './PlayingCards';
 import { MiniTable } from './MiniTable';
 import { ACTION_ORDER, ACTION_STYLE } from './actionStyles';
 import { advise, buildChart, SITUATION_INFO, STACK_INFO, type Action, type Situation, type StackDepth } from '../../poker/advisor';
 import { handLabel, handName, parseRange, rangePercent, comboCount, TOTAL_COMBOS, type HandKey } from '../../poker/cards';
-import { MAX_PLAYERS, MIN_PLAYERS, POSITION_INFO, positionsForTable, preflopOrder, type PositionGroup, type PositionId } from '../../poker/positions';
+import { POSITION_INFO, positionsForTable, preflopOrder, type PositionGroup, type PositionId } from '../../poker/positions';
 import { OPEN_RAISE } from '../../poker/ranges';
 
-type Tab = 'chart' | 'positions' | 'howto';
+type Tab = 'assistant' | 'chart' | 'positions' | 'howto';
+
+const TAB_KEY = 'nexpulse-guide-tab';
+const TABS: Tab[] = ['assistant', 'chart', 'positions', 'howto'];
+
+/** Pestaña inicial: la del link (?tab=tabla) o la última que usó; si no, el asistente. */
+const initialTab = (): Tab => {
+    const fromUrl = new URLSearchParams(window.location.search).get('tab');
+    const aliases: Record<string, Tab> = { asistente: 'assistant', tabla: 'chart', posiciones: 'positions', ayuda: 'howto' };
+    if (fromUrl && aliases[fromUrl]) return aliases[fromUrl];
+    try {
+        const saved = localStorage.getItem(TAB_KEY) as Tab | null;
+        if (saved && TABS.includes(saved)) return saved;
+    } catch {
+        /* sin preferencia */
+    }
+    return 'assistant';
+};
 
 interface GuideSettings {
     players: number;
@@ -41,15 +60,23 @@ const GROUP_TONE: Record<PositionGroup, string> = {
     blinds: 'text-secondary border-secondary/30 bg-secondary/10',
 };
 
-/** Guía visual de manos iniciales: se puede abrir sola (?view=guia) o desde la app. */
-export const GuidePage: React.FC = () => {
-    const [tab, setTab] = useState<Tab>('chart');
+/** Asistente y guía de manos: se puede abrir sola (?view=guia) o desde la app. */
+export const GuidePage: React.FC<{ bigBlinds?: number; header?: React.ReactNode }> = ({ bigBlinds, header }) => {
+    const [tab, setTab] = useState<Tab>(initialTab);
     const [settings, setSettings] = useState<GuideSettings>(loadSettings);
     const [selected, setSelected] = useState<HandKey | null>(null);
 
     useEffect(() => {
-        document.title = 'NexPulse · Guía de manos';
-    }, []);
+        if (!header) document.title = 'NexPulse · Asistente de manos';
+    }, [header]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(TAB_KEY, tab);
+        } catch {
+            /* Preferencia opcional */
+        }
+    }, [tab]);
 
     useEffect(() => {
         try {
@@ -74,23 +101,25 @@ export const GuidePage: React.FC = () => {
     return (
         <div className="min-h-dvh bg-background text-white">
             <div className="max-w-6xl mx-auto px-4 py-5 sm:py-8">
-                <header className="flex items-center gap-3 mb-5">
-                    <Logo className="w-10 h-10" />
-                    <div>
-                        <h1 className="font-black text-xl sm:text-2xl tracking-tight">Guía de manos</h1>
-                        <p className="text-xs text-gray-500">Qué hacer antes del flop según tu posición</p>
-                    </div>
-                </header>
+                {header ?? (
+                    <header className="flex items-center gap-3 mb-5">
+                        <Logo className="w-10 h-10" />
+                        <div>
+                            <h1 className="font-black text-xl sm:text-2xl tracking-tight">Asistente de manos</h1>
+                            <p className="text-xs text-gray-500">Qué hacer antes del flop según tu posición</p>
+                        </div>
+                    </header>
+                )}
 
-                <nav role="tablist" aria-label="Secciones de la guía" className="grid grid-cols-3 gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-5">
-                    {([['chart', 'Tabla', Grid3x3], ['positions', 'Posiciones', Armchair], ['howto', 'Cómo se lee', BookOpen]] as const).map(([id, label, Icon]) => (
+                <nav role="tablist" aria-label="Secciones" className="grid grid-cols-4 gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-5">
+                    {([['assistant', 'Asistente', Sparkles], ['chart', 'Tabla', Grid3x3], ['positions', 'Posiciones', Armchair], ['howto', 'Ayuda', BookOpen]] as const).map(([id, label, Icon]) => (
                         <button
                             key={id}
                             role="tab"
                             aria-selected={tab === id}
                             onClick={() => setTab(id)}
                             className={cn(
-                                'h-10 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors',
+                                'h-12 sm:h-10 rounded-lg text-[11px] sm:text-sm font-bold flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 transition-colors',
                                 tab === id ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_40%,transparent)]' : 'text-gray-400 hover:text-white'
                             )}
                         >
@@ -99,6 +128,7 @@ export const GuidePage: React.FC = () => {
                     ))}
                 </nav>
 
+                {tab === 'assistant' && <AssistantTab bigBlinds={bigBlinds} />}
                 {tab === 'chart' && <ChartTab settings={settings} update={update} selected={selected} onSelect={setSelected} />}
                 {tab === 'positions' && <PositionsTab players={settings.players} onPlayers={(players) => update({ players })} onOpen={openPosition} />}
                 {tab === 'howto' && <HowToTab />}
@@ -108,41 +138,6 @@ export const GuidePage: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
-
-const Chip: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode; title?: string; className?: string }> = ({ active, onClick, children, title, className }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        title={title}
-        aria-pressed={active}
-        className={cn(
-            'h-9 px-3 rounded-lg text-xs font-bold border transition-colors whitespace-nowrap',
-            active ? 'bg-primary text-black border-primary' : 'bg-white/[0.03] border-white/10 text-gray-300 hover:border-white/25 hover:text-white',
-            className
-        )}
-    >
-        {children}
-    </button>
-);
-
-const ControlRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <div>
-        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em] mb-1.5">{label}</div>
-        <div className="flex flex-wrap gap-1.5">{children}</div>
-    </div>
-);
-
-const PlayersStepper: React.FC<{ value: number; onChange: (n: number) => void }> = ({ value, onChange }) => (
-    <div className="flex items-center gap-1 bg-black/30 border border-white/10 rounded-lg p-0.5 w-fit">
-        <button type="button" aria-label="Menos jugadores" disabled={value <= MIN_PLAYERS} onClick={() => onChange(value - 1)} className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-white/10 disabled:opacity-30">
-            <Minus className="w-4 h-4" />
-        </button>
-        <span className="w-8 text-center font-mono font-black text-lg">{value}</span>
-        <button type="button" aria-label="Más jugadores" disabled={value >= MAX_PLAYERS} onClick={() => onChange(value + 1)} className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-white/10 disabled:opacity-30">
-            <Plus className="w-4 h-4" />
-        </button>
-    </div>
-);
 
 const ChartTab: React.FC<{
     settings: GuideSettings;

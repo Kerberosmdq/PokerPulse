@@ -65,7 +65,7 @@ export const LandingPage: React.FC = () => {
                         </Button>
                     )}
                     <Button variant="outline" onClick={() => window.open(`${window.location.pathname}?view=guia`, '_blank')} className="rounded-full h-12">
-                        <Grid3x3 className="w-4 h-4" /> Guía de manos
+                        <Grid3x3 className="w-4 h-4" /> Asistente de manos
                     </Button>
                 </motion.div>
 

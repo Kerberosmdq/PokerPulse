@@ -174,7 +174,8 @@ const sizeLabel = (spot: Spot, action: Action): string => {
         case 'call':
             return spot.situation === 'limped' ? 'Pagá la ciega' : 'Pagá';
         case 'check':
-            return 'Pasá (check)';
+            // Si todos se tiraron hasta la ciega grande, la mano ya terminó
+            return spot.situation === 'unopened' && spot.position === 'BB' ? 'Ganaste las ciegas' : 'Pasá (check)';
         case 'fold':
             return 'Tirate';
     }

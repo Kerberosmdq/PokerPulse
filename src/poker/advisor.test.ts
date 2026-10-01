@@ -90,6 +90,11 @@ describe('advise', () => {
         expect(advise(spot({ position: 'BB', situation: 'limped' }), '72o').action).toBe('check');
     });
 
+    it('si todos se tiraron hasta la ciega grande, ya ganó', () => {
+        expect(advise(spot({ position: 'BB', situation: 'unopened' }), '72o').label).toBe('Ganaste las ciegas');
+        expect(advise(spot({ position: 'BB', situation: 'limped' }), '72o').label).toBe('Pasá (check)');
+    });
+
     it('con stack medio no farolea con resubidas', () => {
         expect(advise(spot({ position: 'BTN', situation: 'raised', raiser: 'late', stack: 'deep' }), 'A5s').action).toBe('threebet');
         expect(advise(spot({ position: 'BTN', situation: 'raised', raiser: 'late', stack: 'medium' }), 'A5s').action).not.toBe('threebet');

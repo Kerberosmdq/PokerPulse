@@ -7,6 +7,8 @@ interface MiniTableProps {
     dealerSeat: number;
     /** Asiento resaltado (el jugador o la posición elegida) */
     highlightSeat?: number;
+    /** Etiqueta debajo del asiento resaltado (p. ej. "Vos") */
+    highlightLabel?: string;
     onSeatClick?: (seat: number) => void;
     /** Texto en el centro del paño */
     center?: React.ReactNode;
@@ -17,7 +19,7 @@ interface MiniTableProps {
  * Mesa ovalada con los asientos en sentido horario (el asiento 0 abajo al centro) y la
  * posición de cada uno según dónde está el dealer.
  */
-export const MiniTable: React.FC<MiniTableProps> = ({ players, dealerSeat, highlightSeat, onSeatClick, center, className }) => (
+export const MiniTable: React.FC<MiniTableProps> = ({ players, dealerSeat, highlightSeat, highlightLabel, onSeatClick, center, className }) => (
     <div className={cn('relative w-full aspect-[1.75/1]', className)}>
         <div className="absolute inset-[16%_12%] rounded-[50%] bg-gradient-to-b from-emerald-900/50 to-emerald-950/60 border-[6px] border-[#2b2117] shadow-[inset_0_0_30px_rgba(0,0,0,0.6),0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center">
             {center && <div className="text-center px-2">{center}</div>}
@@ -64,6 +66,9 @@ export const MiniTable: React.FC<MiniTableProps> = ({ players, dealerSeat, highl
                             </span>
                         )}
                     </span>
+                    {isHighlight && highlightLabel && (
+                        <span className="absolute top-full mt-0.5 text-[9px] font-black uppercase tracking-widest text-primary whitespace-nowrap">{highlightLabel}</span>
+                    )}
                 </button>
             );
         })}
