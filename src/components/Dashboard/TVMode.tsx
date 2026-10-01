@@ -9,6 +9,17 @@ import {
     getTournamentStats, placeMedal, secondsUntilNextBreak,
 } from '../../utils/tournament';
 import { usePrizes } from '../../hooks/usePrizes';
+import { QRCodeSVG } from 'qrcode.react';
+import { playerLink } from '../../utils/links';
+
+/** ID del anfitrión si la conexión de celulares ya se usó en este navegador. */
+const savedHostId = () => {
+    try {
+        return localStorage.getItem('nexpulse-host-id');
+    } catch {
+        return null;
+    }
+};
 
 /**
  * Tiempo restante calculado localmente a partir de levelEndTime: la pantalla TV se ve fluida
@@ -67,6 +78,7 @@ export const TVDisplay: React.FC = () => {
     const isPaused = useGameStore(s => s.isPaused);
     const tournamentName = useGameStore(s => s.tournamentName);
     const remaining = useLiveRemaining();
+    const [hostId] = useState(savedHostId);
 
     const level = blindsStructure[currentLevelIndex];
     const isBreak = level?.type === 'break';
@@ -174,6 +186,18 @@ export const TVDisplay: React.FC = () => {
                         <InfoBlock label="Próximo descanso" small>
                             <span className="text-warning/90">{formatTime(toBreak)}</span>
                         </InfoBlock>
+                    )}
+
+                    {hostId && (
+                        <div className="flex items-center gap-[1vw] mt-auto">
+                            <div className="bg-white p-[0.4vw] rounded-lg shrink-0">
+                                <QRCodeSVG value={playerLink(hostId)} size={256} style={{ width: '6.5vw', height: '6.5vw', minWidth: 72, minHeight: 72 }} />
+                            </div>
+                            <div className="text-gray-400 leading-tight" style={{ fontSize: '1.1vw' }}>
+                                <div className="font-bold text-gray-200">Asistente de manos</div>
+                                Escaneá con tu celular para ver tus fichas y qué jugar
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>

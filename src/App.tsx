@@ -12,6 +12,8 @@ const Wizard = lazy(() => import('./components/Wizard/Wizard').then(m => ({ defa
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard').then(m => ({ default: m.Dashboard })));
 const RemoteClient = lazy(() => import('./components/Remote/RemoteClient').then(m => ({ default: m.RemoteClient })));
 const TVWindow = lazy(() => import('./components/Dashboard/TVMode').then(m => ({ default: m.TVWindow })));
+const PlayerClient = lazy(() => import('./components/Player/PlayerClient').then(m => ({ default: m.PlayerClient })));
+const GuidePage = lazy(() => import('./components/Guide/GuidePage').then(m => ({ default: m.GuidePage })));
 
 const Loading = () => (
   <div className="min-h-dvh flex items-center justify-center bg-background" aria-busy="true">
@@ -19,11 +21,14 @@ const Loading = () => (
   </div>
 );
 
-type AppMode = 'host' | 'remote' | 'tv';
+type AppMode = 'host' | 'remote' | 'player' | 'tv' | 'guide';
 
 const detectMode = (): AppMode => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('view') === 'tv') return 'tv';
+  if (params.get('view') === 'guia') return 'guide';
+  // El QR de jugadores lleva rol=jugador; el del organizador, su clave
+  if (params.get('id') && params.get('rol') === 'jugador') return 'player';
   if (params.get('id') || window.location.pathname === '/remote') return 'remote';
   return 'host';
 };
@@ -42,7 +47,7 @@ function App() {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.forEach(c => c.startsWith('theme-') && root.classList.remove(c));
-    root.classList.add(`theme-${mode === 'remote' ? 'cyberpunk' : theme}`);
+    root.classList.add(`theme-${mode === 'remote' || mode === 'player' ? 'cyberpunk' : theme}`);
   }, [theme, mode]);
 
   useEffect(() => {
@@ -56,6 +61,14 @@ function App() {
         <Toaster />
       </>
     );
+  }
+
+  if (mode === 'player') {
+    return <Suspense fallback={<Loading />}><PlayerClient /></Suspense>;
+  }
+
+  if (mode === 'guide') {
+    return <Suspense fallback={<Loading />}><GuidePage /></Suspense>;
   }
 
   if (mode === 'tv') {
