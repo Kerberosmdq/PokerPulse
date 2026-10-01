@@ -95,6 +95,7 @@ export const PlayerClient: React.FC = () => {
     return (
         <GuidePage
             bigBlinds={myBigBlinds}
+            tablePlayers={state.players.filter(p => p.id !== identity && p.status !== 'busted').map(p => p.name)}
             header={<TournamentHeader state={state} status={status} me={me} myBigBlinds={myBigBlinds} onChange={() => choose(null)} />}
         />
     );

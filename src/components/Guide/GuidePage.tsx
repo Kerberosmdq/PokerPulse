@@ -1,31 +1,35 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Grid3x3, Armchair, BookOpen, Info, Sparkles } from 'lucide-react';
+import { Grid3x3, BookOpen, Info, Sparkles, Users } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import { HandGrid } from './HandGrid';
 import { Chip, ControlRow, PlayersStepper } from './GuideControls';
 import { AssistantTab } from './AssistantTab';
+import { RivalsTab } from './RivalsTab';
+import { useRivalNotes } from '../../hooks/useRivalNotes';
 import { HandCards } from './PlayingCards';
 import { MiniTable } from './MiniTable';
-import { ACTION_ORDER, ACTION_STYLE } from './actionStyles';
+import { ACTION_ORDER, ACTION_STYLE, pillStyle } from './actionStyles';
 import { advise, buildChart, SITUATION_INFO, STACK_INFO, type Action, type Situation, type StackDepth } from '../../poker/advisor';
 import { handLabel, handName, parseRange, rangePercent, comboCount, TOTAL_COMBOS, type HandKey } from '../../poker/cards';
 import { POSITION_INFO, positionsForTable, preflopOrder, type PositionGroup, type PositionId } from '../../poker/positions';
 import { OPEN_RAISE } from '../../poker/ranges';
 
-type Tab = 'assistant' | 'chart' | 'positions' | 'howto';
+// "Ayuda" incluye las posiciones (así entran 4 pestañas en el celular)
+type Tab = 'assistant' | 'chart' | 'rivals' | 'howto';
 
 const TAB_KEY = 'nexpulse-guide-tab';
-const TABS: Tab[] = ['assistant', 'chart', 'positions', 'howto'];
+const TABS: Tab[] = ['assistant', 'chart', 'rivals', 'howto'];
 
 /** Pestaña inicial: la del link (?tab=tabla) o la última que usó; si no, el asistente. */
 const initialTab = (): Tab => {
     const fromUrl = new URLSearchParams(window.location.search).get('tab');
-    const aliases: Record<string, Tab> = { asistente: 'assistant', tabla: 'chart', posiciones: 'positions', ayuda: 'howto' };
+    const aliases: Record<string, Tab> = { asistente: 'assistant', tabla: 'chart', rivales: 'rivals', posiciones: 'howto', ayuda: 'howto' };
     if (fromUrl && aliases[fromUrl]) return aliases[fromUrl];
     try {
-        const saved = localStorage.getItem(TAB_KEY) as Tab | null;
-        if (saved && TABS.includes(saved)) return saved;
+        const saved = localStorage.getItem(TAB_KEY);
+        if (saved === 'positions') return 'howto';
+        if (saved && TABS.includes(saved as Tab)) return saved as Tab;
     } catch {
         /* sin preferencia */
     }
@@ -61,7 +65,17 @@ const GROUP_TONE: Record<PositionGroup, string> = {
 };
 
 /** Asistente y guía de manos: se puede abrir sola (?view=guia) o desde la app. */
-export const GuidePage: React.FC<{ bigBlinds?: number; header?: React.ReactNode }> = ({ bigBlinds, header }) => {
+export const GuidePage: React.FC<{
+    bigBlinds?: number;
+    header?: React.ReactNode;
+    /** Nombres de los demás jugadores del torneo (si entró por QR) */
+    tablePlayers?: string[];
+}> = ({ bigBlinds, header, tablePlayers = [] }) => {
+    const rivals = useRivalNotes();
+    // Para "¿Quién?": los del torneo; si no hay torneo, los que ya tienen notas
+    const rivalNames = tablePlayers.length > 0
+        ? tablePlayers
+        : Object.values(rivals.notes).sort((a, b) => b.updatedAt - a.updatedAt).map(n => n.name);
     const [tab, setTab] = useState<Tab>(initialTab);
     const [settings, setSettings] = useState<GuideSettings>(loadSettings);
     const [selected, setSelected] = useState<HandKey | null>(null);
@@ -112,7 +126,7 @@ export const GuidePage: React.FC<{ bigBlinds?: number; header?: React.ReactNode 
                 )}
 
                 <nav role="tablist" aria-label="Secciones" className="grid grid-cols-4 gap-1 bg-black/30 p-1 rounded-xl border border-white/5 mb-5">
-                    {([['assistant', 'Asistente', Sparkles], ['chart', 'Tabla', Grid3x3], ['positions', 'Posiciones', Armchair], ['howto', 'Ayuda', BookOpen]] as const).map(([id, label, Icon]) => (
+                    {([['assistant', 'Asistente', Sparkles], ['chart', 'Tabla', Grid3x3], ['rivals', 'Rivales', Users], ['howto', 'Ayuda', BookOpen]] as const).map(([id, label, Icon]) => (
                         <button
                             key={id}
                             role="tab"
@@ -128,10 +142,15 @@ export const GuidePage: React.FC<{ bigBlinds?: number; header?: React.ReactNode 
                     ))}
                 </nav>
 
-                {tab === 'assistant' && <AssistantTab bigBlinds={bigBlinds} />}
+                {tab === 'assistant' && <AssistantTab bigBlinds={bigBlinds} rivals={rivals} rivalNames={rivalNames} />}
                 {tab === 'chart' && <ChartTab settings={settings} update={update} selected={selected} onSelect={setSelected} />}
-                {tab === 'positions' && <PositionsTab players={settings.players} onPlayers={(players) => update({ players })} onOpen={openPosition} />}
-                {tab === 'howto' && <HowToTab />}
+                {tab === 'rivals' && <RivalsTab rivals={rivals} tablePlayers={tablePlayers} />}
+                {tab === 'howto' && (
+                    <div className="space-y-5">
+                        <PositionsTab players={settings.players} onPlayers={(players) => update({ players })} onOpen={openPosition} />
+                        <HowToTab />
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -241,7 +260,6 @@ const HandDetail: React.FC<{ spot: Parameters<typeof advise>[0]; hand: HandKey |
         );
     }
     const advice = advise(spot, hand);
-    const style = ACTION_STYLE[advice.action];
     const strength = Math.max(1, 100 - advice.handPercentile);
 
     return (
@@ -256,7 +274,7 @@ const HandDetail: React.FC<{ spot: Parameters<typeof advise>[0]; hand: HandKey |
 
             <div
                 className="rounded-xl px-4 py-3 font-black text-lg"
-                style={{ backgroundColor: style.bg, color: style.text }}
+                style={pillStyle(advice.action)}
             >
                 <span>{advice.label}</span>
             </div>

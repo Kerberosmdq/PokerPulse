@@ -14,5 +14,12 @@ export const ACTION_STYLE: Record<Action, { label: string; short: string; bg: st
     fold: { label: 'Tirarse', short: 'Tirar', bg: '#141820', text: '#6b7280', ring: '#4b5563' },
 };
 
+/**
+ * Color del cartel grande de respuesta: igual que la celda, salvo "tirarse", que en la cuadrícula
+ * va apagado pero en la respuesta tiene que leerse bien.
+ */
+export const pillStyle = (action: Action) =>
+    action === 'fold' ? { backgroundColor: '#3f3f46', color: '#ffffff' } : { backgroundColor: ACTION_STYLE[action].bg, color: ACTION_STYLE[action].text };
+
 /** Orden en que se muestran en la leyenda (de más agresiva a tirarse). */
 export const ACTION_ORDER: Action[] = ['allin', 'fourbet', 'threebet', 'raise', 'call', 'check', 'fold'];

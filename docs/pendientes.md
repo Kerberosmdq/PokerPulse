@@ -164,7 +164,7 @@ Este archivo registra todas las tareas y mejoras planificadas para el torneo de 
 - [x] **25. Guía visual.** Cuadrícula 13 × 13 en colores por posición y situación, explicación de cada mano y de las posiciones. Accesible por link, sin torneo.
 - [x] **26. Asistente de mano.** Mini-mesa (jugadores, tu asiento, dealer), cartas en 1 toque, situación en 1 toque y respuesta grande con el "¿por qué?".
 - [x] **27. QR de jugadores.** Dos QR (organizador / jugadores), vista de jugador con reloj, ciegas y sus fichas en BB, y permisos validados en la computadora.
-- [ ] **28. Notas privadas de rivales** que ajustan el consejo.
+- [x] **28. Notas privadas de rivales** que ajustan el consejo.
 - [ ] **29. Modo práctica.** Juego de preguntas con puntos y rachas para aprender entre manos.
 
 **Fases futuras:**

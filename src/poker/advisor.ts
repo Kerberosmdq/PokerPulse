@@ -24,6 +24,10 @@ export interface Spot {
     raiser?: PositionGroup;
     /** Cuántos pagaron sin subir (para calcular la subida). Por defecto, 1. */
     limpers?: number;
+    /** No resubir de farol (p. ej. contra alguien que paga todo) */
+    noBluffs?: boolean;
+    /** La subida se evaluó por el estilo del rival, no por su posición (para el texto) */
+    readOnRaiser?: boolean;
 }
 
 export type Chart = Record<HandKey, Action>;
@@ -128,7 +132,7 @@ export const buildChart = (spot: Spot): Chart => {
                     : VS_RAISE[raiser === 'blinds' ? 'late' : raiser];
             const threebet = range(table.threebet);
             // Con stack medio no se farolea con resubidas: el rival puede ir all-in
-            const bluff = stack === 'deep' ? range(table.bluff) : new Set<HandKey>();
+            const bluff = stack === 'deep' && !spot.noBluffs ? range(table.bluff) : new Set<HandKey>();
             const call = range(table.call);
             return assign(h => (threebet.has(h) || bluff.has(h) ? 'threebet' : call.has(h) ? 'call' : 'fold'));
         }
@@ -139,7 +143,7 @@ export const buildChart = (spot: Spot): Chart => {
                 return assign(h => (shove.has(h) ? 'allin' : 'fold'));
             }
             const fourbet = range(VS_THREEBET.fourbet);
-            const bluff = isLate(position) ? range(VS_THREEBET.fourbetBluffLate) : new Set<HandKey>();
+            const bluff = isLate(position) && !spot.noBluffs ? range(VS_THREEBET.fourbetBluffLate) : new Set<HandKey>();
             const call = range(isLate(position) ? VS_THREEBET.callInPosition : VS_THREEBET.callOutOfPosition);
             return assign(h => (fourbet.has(h) || bluff.has(h) ? 'fourbet' : call.has(h) ? 'call' : 'fold'));
         }
@@ -243,9 +247,13 @@ export const advise = (spot: Spot, hand: HandKey): Advice => {
             } else if (action === 'call') {
                 reason = spot.position === 'BB'
                     ? `Desde la ciega grande ya pusiste fichas: con ${name} pagar sale barato para el pozo que podés ganar.`
-                    : `${name} juega bien contra una subida desde ${raiserText}, pero no tanto como para resubir: pagá y mirá el flop.`;
+                    : spot.readOnRaiser
+                        ? `${name} alcanza para pagar a este rival, pero no para resubir: pagá y mirá el flop.`
+                        : `${name} juega bien contra una subida desde ${raiserText}, pero no tanto como para resubir: pagá y mirá el flop.`;
             } else {
-                reason = `Si el rival sube desde ${raiserText}, suele tener buena mano. ${name} quedaría por debajo: tirate.`;
+                reason = spot.readOnRaiser
+                    ? `${name} no alcanza contra la subida de este rival: tirate.`
+                    : `Si el rival sube desde ${raiserText}, suele tener buena mano. ${name} quedaría por debajo: tirate.`;
             }
             break;
         }

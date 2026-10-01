@@ -5,11 +5,21 @@ import { cn } from '../../utils/cn';
 import { HandGrid } from './HandGrid';
 import { HandCards } from './PlayingCards';
 import { MiniTable } from './MiniTable';
-import { ACTION_STYLE } from './actionStyles';
+import { pillStyle } from './actionStyles';
 import { Chip, PlayersStepper } from './GuideControls';
 import { advise, buildChart, SITUATION_INFO, STACK_INFO, stackDepthFor, type Situation, type StackDepth } from '../../poker/advisor';
 import { handLabel, type HandKey } from '../../poker/cards';
 import { POSITION_INFO, positionOf, type PositionGroup } from '../../poker/positions';
+import { applyOpponent, profileOf, STYLE_INFO, type Observation, type OpponentAdjustment } from '../../poker/opponents';
+import type { RivalNotesApi } from '../../hooks/useRivalNotes';
+
+// Qué se anota del rival según lo que pasó en la mano
+const OBSERVED: Partial<Record<Situation, { obs: Observation; label: string }>> = {
+    limped: { obs: 'call', label: 'pagó' },
+    raised: { obs: 'raise', label: 'subió' },
+    threebet: { obs: 'threebet', label: 'resubió' },
+    allin: { obs: 'raise', label: 'fue all-in' },
+};
 
 interface AssistantSettings {
     players: number;
@@ -47,13 +57,18 @@ type MarkMode = 'hero' | 'dealer';
 interface AssistantTabProps {
     /** Si el jugador está en un torneo, sus fichas en ciegas grandes (completa "Tus fichas") */
     bigBlinds?: number;
+    rivals: RivalNotesApi;
+    /** Rivales para elegir en "¿Quién?" (los del torneo, si está conectado) */
+    rivalNames: string[];
 }
 
 /**
  * Asistente de mano: armás tu mesa (jugadores, tu asiento y el dealer), elegís qué pasó antes y
  * tocás tu mano. La respuesta aparece abajo sin tener que desplazarse.
  */
-export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds }) => {
+export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds, rivals, rivalNames }) => {
+    const [rival, setRival] = useState<string | null>(null);
+    const [logged, setLogged] = useState(false);
     const [settings, setSettings] = useState<AssistantSettings>(loadSettings);
     const [hand, setHand] = useState<HandKey | null>(null);
     // Si todavía no marcó su asiento (primera vez), empezar por ahí
@@ -92,8 +107,14 @@ export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds }) => {
     const stack = bigBlinds !== undefined ? stackDepthFor(bigBlinds) : settings.stack;
     const position = positionOf(players, dealerSeat, heroSeat);
     const spot = useMemo(() => ({ players, position, situation, stack, raiser }), [players, position, situation, stack, raiser]);
-    const chart = useMemo(() => buildChart(spot), [spot]);
-    const advice = hand ? advise(spot, hand) : null;
+    // Si se sabe quién apostó, el consejo se adapta a su estilo
+    const rivalProfile = rival ? profileOf(rivals.get(rival)) : null;
+    const adjusted: OpponentAdjustment = rival && rivalProfile ? applyOpponent(spot, rival, rivalProfile) : { spot };
+    const chart = buildChart(adjusted.spot);
+    const baseAdvice = hand ? advise(adjusted.spot, hand) : null;
+    const advice = baseAdvice && adjusted.note ? { ...baseAdvice, reason: `${baseAdvice.reason} ${adjusted.note}` } : baseAdvice;
+    const observed = OBSERVED[situation];
+    const askWho = !!observed;
     const raiserOptions: PositionGroup[] = position === 'BB' ? ['early', 'middle', 'late', 'blinds'] : ['early', 'middle', 'late'];
 
     const onSeat = (seat: number) => {
@@ -109,6 +130,8 @@ export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds }) => {
         // En la mano siguiente el botón pasa al jugador de la izquierda
         update({ dealerSeat: (dealerSeat + 1) % players, situation: 'unopened' });
         setHand(null);
+        setRival(null);
+        setLogged(false);
     };
 
     return (
@@ -187,6 +210,19 @@ export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds }) => {
                             ))}
                         </ScrollRow>
                     )}
+                    {askWho && rivalNames.length > 0 && (
+                        <ScrollRow label="¿Quién?">
+                            <Chip active={rival === null} onClick={() => { setRival(null); setLogged(false); }}>No sé</Chip>
+                            {rivalNames.map(n => {
+                                const style = profileOf(rivals.get(n)).style;
+                                return (
+                                    <Chip key={n} active={rival === n} onClick={() => { setRival(n); setLogged(false); }} title={STYLE_INFO[style].label}>
+                                        {n}{style !== 'unknown' && style !== 'regular' && <span className="ml-1 opacity-70">· {STYLE_INFO[style].label.toLowerCase()}</span>}
+                                    </Chip>
+                                );
+                            })}
+                        </ScrollRow>
+                    )}
                     {bigBlinds !== undefined ? (
                         <p className="text-xs text-gray-400">
                             Tus fichas: <b className="text-white font-mono">{Math.round(bigBlinds)} BB</b> · {STACK_INFO[stack].label.toLowerCase()} (del torneo)
@@ -239,11 +275,20 @@ export const AssistantTab: React.FC<AssistantTabProps> = ({ bigBlinds }) => {
                                 </button>
                             </div>
 
-                            <div className="rounded-xl px-4 py-3 font-black text-xl" style={{ backgroundColor: ACTION_STYLE[advice.action].bg, color: ACTION_STYLE[advice.action].text }}>
+                            <div className="rounded-xl px-4 py-3 font-black text-xl" style={pillStyle(advice.action)}>
                                 {advice.label}
                             </div>
                             <p className="text-sm text-gray-200 leading-relaxed">{advice.reason}</p>
                             {advice.followUp && <p className="text-xs text-gray-400">{advice.followUp}</p>}
+                            {rival && observed && (
+                                <button
+                                    onClick={() => { rivals.record(rival, observed.obs); setLogged(true); }}
+                                    disabled={logged}
+                                    className="w-full h-9 rounded-xl border border-white/10 text-xs font-bold text-gray-300 hover:bg-white/5 disabled:text-primary disabled:border-primary/40"
+                                >
+                                    {logged ? `✓ Anotado: ${rival} ${observed.label}` : `Anotar en mis notas: ${rival} ${observed.label}`}
+                                </button>
+                            )}
 
                             <div className="grid grid-cols-2 gap-2 pt-1">
                                 <button onClick={() => setHand(null)} className="h-10 rounded-xl border border-white/10 text-xs font-bold text-gray-300 hover:bg-white/5 flex items-center justify-center gap-1.5">
