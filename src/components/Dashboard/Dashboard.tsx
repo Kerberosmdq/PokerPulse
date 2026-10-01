@@ -147,7 +147,7 @@ export const Dashboard: React.FC = () => {
                         <Tv className="w-4 h-4 text-secondary" /> <span className="hidden sm:inline">Modo TV</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setOverlay('remote')} className="relative">
-                        <QrCode className="w-4 h-4 text-primary" /> <span className="hidden sm:inline">Remoto</span>
+                        <QrCode className="w-4 h-4 text-primary" /> <span className="hidden sm:inline">Celulares</span>
                         {remoteDevices > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary animate-pulse" aria-label="Control remoto conectado" />}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setOverlay('seating')}>

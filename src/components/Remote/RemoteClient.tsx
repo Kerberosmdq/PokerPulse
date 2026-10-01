@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, Search, Skull, RefreshCw, Plus, Coffee, WifiOff, Loader2, Crosshair, X } from 'lucide-react';
-import { peerService, type RemoteAction, type RemoteSnapshot, type RemoteStatus } from '../../services/peerService';
+import { peerService, type RemoteAction, type RemoteRole, type RemoteSnapshot, type RemoteStatus } from '../../services/peerService';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
@@ -10,12 +10,15 @@ import { getAddonStatus, getRebuyStatus } from '../../utils/rules';
 const NO_RULES = { rebuyUntilLevel: 0, maxRebuys: 0, addonUntilLevel: 0, maxAddons: 0 };
 
 const hostIdFromUrl = () => new URLSearchParams(window.location.search).get('id');
+// La clave va después del "#": no se envía a ningún servidor
+const adminKeyFromUrl = () => new URLSearchParams(window.location.hash.slice(1)).get('clave') ?? undefined;
 
 const STATUS_ORDER = { active: 0, away: 1, busted: 2 } as const;
 
 export const RemoteClient: React.FC = () => {
     const [hostId] = useState(hostIdFromUrl);
     const [status, setStatus] = useState<RemoteStatus>('connecting');
+    const [role, setRole] = useState<RemoteRole | null>(null);
     const [state, setState] = useState<RemoteSnapshot | null>(null);
     const [query, setQuery] = useState('');
     const [confirmBust, setConfirmBust] = useState<string | null>(null);
@@ -25,7 +28,7 @@ export const RemoteClient: React.FC = () => {
     useEffect(() => {
         document.title = 'NexPulse · Remoto';
         if (!hostId) return;
-        peerService.connectToHost(hostId, setStatus, setState);
+        peerService.connectToHost(hostId, setStatus, setState, { role: 'admin', key: adminKeyFromUrl(), onRole: setRole });
         return () => peerService.destroy();
     }, [hostId]);
 
@@ -44,7 +47,9 @@ export const RemoteClient: React.FC = () => {
         return () => clearTimeout(t);
     }, [confirmBust]);
 
-    const online = status === 'connected';
+    const connected = status === 'connected';
+    // Sin la clave del organizador el anfitrión ignora las órdenes: no mostrar controles activos
+    const online = connected && role !== 'player';
     const send = (action: RemoteAction) => {
         // Si la conexión se cayó, peerService ya está reintentando y avisa por setStatus
         if (peerService.sendAction(action)) navigator.vibrate?.(15);
@@ -93,14 +98,19 @@ export const RemoteClient: React.FC = () => {
                 </div>
                 <div className={cn(
                     'px-2.5 py-1 rounded-full border text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5 shrink-0',
-                    online ? 'bg-primary/10 border-primary/30 text-primary' : status === 'failed' ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-warning/10 border-warning/30 text-warning'
+                    connected ? 'bg-primary/10 border-primary/30 text-primary' : status === 'failed' ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-warning/10 border-warning/30 text-warning'
                 )}>
-                    <span className={cn('w-1.5 h-1.5 rounded-full', online ? 'bg-primary animate-pulse' : status === 'failed' ? 'bg-accent' : 'bg-warning animate-pulse')} />
-                    {online ? 'En línea' : status === 'failed' ? 'Sin conexión' : 'Reconectando'}
+                    <span className={cn('w-1.5 h-1.5 rounded-full', connected ? 'bg-primary animate-pulse' : status === 'failed' ? 'bg-accent' : 'bg-warning animate-pulse')} />
+                    {connected ? 'En línea' : status === 'failed' ? 'Sin conexión' : 'Reconectando'}
                 </div>
             </div>
             {status === 'failed' && (
                 <Button variant="danger" onClick={() => peerService.retryClient()}>Reintentar conexión</Button>
+            )}
+            {connected && role === 'player' && (
+                <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning" role="alert">
+                    Este enlace no tiene permiso de organizador. En la computadora abrí <b>Celulares → Organizador</b> y escaneá ese QR.
+                </div>
             )}
 
             {/* Reloj */}

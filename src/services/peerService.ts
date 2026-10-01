@@ -6,7 +6,7 @@ import { getAddonStatus, getPoolBreakdown, getRebuyStatus } from '../utils/rules
 
 /** Estado que el anfitrión comparte con los controles remotos. */
 export interface RemoteSnapshot {
-    players: Pick<Player, 'id' | 'name' | 'chips' | 'status' | 'rebuys' | 'addons' | 'bountiesWon'>[];
+    players: Pick<Player, 'id' | 'name' | 'chips' | 'status' | 'rebuys' | 'addons' | 'bountiesWon' | 'table' | 'seat'>[];
     blindsStructure: BlindLevel[];
     currentLevelIndex: number;
     timerSecondsRemaining: number;
@@ -23,7 +23,12 @@ export interface RemoteSnapshot {
     rules: Pick<TournamentSettings, 'rebuyUntilLevel' | 'maxRebuys' | 'addonUntilLevel' | 'maxAddons'>;
 }
 
+/** Organizador (puede controlar el torneo) o jugador (solo mira). */
+export type RemoteRole = 'admin' | 'player';
+
 export type RemoteAction =
+    | { action: 'HELLO'; payload: { role: RemoteRole; key?: string } }
+    | { action: 'WELCOME'; payload: { role: RemoteRole } }
     | { action: 'PAUSE' | 'PLAY' | 'NEXT_LEVEL' | 'PREV_LEVEL' }
     | { action: 'ADJUST_TIMER'; payload: { seconds: number } }
     | { action: 'REBUY' | 'ADDON' | 'AWAY'; payload: { playerId: string } }
@@ -33,6 +38,7 @@ export type RemoteAction =
 export type RemoteStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 const HOST_ID_KEY = 'nexpulse-host-id';
+const ADMIN_KEY = 'nexpulse-admin-key';
 const KEEPALIVE_MS = 4000;
 const STALE_MS = 12000;
 const MAX_RETRIES = 8;
@@ -40,7 +46,7 @@ const MAX_RETRIES = 8;
 const randomHostId = () => `nexpulse-${crypto.randomUUID().slice(0, 8)}`;
 
 const snapshot = (s: PokerGameStore): RemoteSnapshot => ({
-    players: s.players.map(({ id, name, chips, status, rebuys, addons, bountiesWon }) => ({ id, name, chips, status, rebuys, addons, bountiesWon })),
+    players: s.players.map(({ id, name, chips, status, rebuys, addons, bountiesWon, table, seat }) => ({ id, name, chips, status, rebuys, addons, bountiesWon, table, seat })),
     blindsStructure: s.blindsStructure,
     currentLevelIndex: s.currentLevelIndex,
     timerSecondsRemaining: s.timerSecondsRemaining,
@@ -59,6 +65,8 @@ const snapshot = (s: PokerGameStore): RemoteSnapshot => ({
 class PeerService {
     private peer: Peer | null = null;
     private connections: DataConnection[] = [];
+    // Hasta que un celular demuestre tener la clave del organizador, solo puede mirar
+    private roles = new Map<DataConnection, RemoteRole>();
     private storeUnsubscribe: (() => void) | null = null;
     private keepalive: ReturnType<typeof setInterval> | null = null;
     private lastSent = '';
@@ -78,6 +86,23 @@ class PeerService {
 
     get connectedCount() {
         return this.connections.filter(c => c.open).length;
+    }
+
+    /** Cuántos celulares hay conectados de cada tipo. */
+    get connectionCounts() {
+        const open = this.connections.filter(c => c.open);
+        const admins = open.filter(c => this.roles.get(c) === 'admin').length;
+        return { admins, players: open.length - admins };
+    }
+
+    /** Clave secreta del organizador (solo viaja en el QR de organizador). */
+    get adminKey() {
+        let key = localStorage.getItem(ADMIN_KEY);
+        if (!key) {
+            key = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+            localStorage.setItem(ADMIN_KEY, key);
+        }
+        return key;
     }
 
     onConnectionsChange(listener: (count: number) => void) {
@@ -118,12 +143,25 @@ class PeerService {
 
         peer.on('connection', (conn) => {
             conn.on('open', () => {
+                this.roles.set(conn, 'player');
                 this.connections.push(conn);
                 this.notifyConnections();
                 conn.send({ action: 'STATE_UPDATE', payload: snapshot(useGameStore.getState()) } satisfies RemoteAction);
-                toast.info('📱 Control remoto conectado');
             });
-            conn.on('data', (data) => this.handleRemoteAction(data as RemoteAction));
+            conn.on('data', (data) => {
+                const msg = data as RemoteAction;
+                if (msg?.action === 'HELLO') {
+                    const role: RemoteRole = msg.payload?.role === 'admin' && msg.payload?.key === this.adminKey ? 'admin' : 'player';
+                    this.roles.set(conn, role);
+                    conn.send({ action: 'WELCOME', payload: { role } } satisfies RemoteAction);
+                    this.notifyConnections();
+                    if (role === 'admin') toast.info('📱 Control del organizador conectado');
+                    else if (msg.payload?.role === 'admin') toast.warning('📱 Un celular pidió controlar el torneo sin la clave: queda como jugador');
+                    return;
+                }
+                // Solo el organizador puede cambiar el torneo
+                if (this.roles.get(conn) === 'admin') this.handleRemoteAction(msg);
+            });
             conn.on('close', () => this.dropConnection(conn));
             conn.on('error', () => this.dropConnection(conn));
         });
@@ -147,6 +185,7 @@ class PeerService {
     private dropConnection(conn: DataConnection) {
         const before = this.connections.length;
         this.connections = this.connections.filter(c => c !== conn);
+        this.roles.delete(conn);
         if (this.connections.length !== before) this.notifyConnections();
     }
 
@@ -234,15 +273,25 @@ class PeerService {
         hostId: string;
         onStatus: (s: RemoteStatus) => void;
         onState: (s: RemoteSnapshot) => void;
+        hello: { role: RemoteRole; key?: string };
+        onRole?: (role: RemoteRole) => void;
         retries: number;
         lastMessageAt: number;
         retryTimer?: ReturnType<typeof setTimeout>;
         watchdog?: ReturnType<typeof setInterval>;
     } | null = null;
 
-    connectToHost(hostId: string, onStatus: (s: RemoteStatus) => void, onState: (s: RemoteSnapshot) => void) {
+    connectToHost(
+        hostId: string,
+        onStatus: (s: RemoteStatus) => void,
+        onState: (s: RemoteSnapshot) => void,
+        options: { role?: RemoteRole; key?: string; onRole?: (role: RemoteRole) => void } = {},
+    ) {
         this.disconnectClient();
-        this.clientState = { hostId, onStatus, onState, retries: 0, lastMessageAt: Date.now() };
+        this.clientState = {
+            hostId, onStatus, onState, retries: 0, lastMessageAt: Date.now(),
+            hello: { role: options.role ?? 'player', key: options.key }, onRole: options.onRole,
+        };
         onStatus('connecting');
         this.openClientConnection();
 
@@ -278,11 +327,13 @@ class PeerService {
                 cs.retries = 0;
                 cs.lastMessageAt = Date.now();
                 cs.onStatus('connected');
+                conn.send({ action: 'HELLO', payload: cs.hello } satisfies RemoteAction);
             });
             conn.on('data', (data) => {
                 cs.lastMessageAt = Date.now();
                 const msg = data as RemoteAction;
                 if (msg.action === 'STATE_UPDATE') cs.onState(msg.payload);
+                else if (msg.action === 'WELCOME') cs.onRole?.(msg.payload.role);
             });
             // Ignorar eventos de peers viejos que destruimos a propósito al reintentar
             conn.on('close', () => { if (this.peer === peer) this.scheduleClientRetry(); });
@@ -332,6 +383,7 @@ class PeerService {
         this.peer?.destroy();
         this.peer = null;
         this.connections = [];
+        this.roles.clear();
         this.storeUnsubscribe?.();
         this.storeUnsubscribe = null;
         if (this.keepalive) clearInterval(this.keepalive);
