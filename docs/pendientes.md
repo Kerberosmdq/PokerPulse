@@ -145,3 +145,28 @@ Este archivo registra todas las tareas y mejoras planificadas para el torneo de 
 - [x] **21. Rebalanceo de mesas.** Aviso con los cambios sugeridos cuando las mesas quedan desparejas o sobra una; propone sortear la mesa final.
 - [x] **22. División del código.** Cada pantalla y modal se descarga al usarse; PeerJS solo con el control remoto. Carga inicial: de ~600 KB a ~360 KB.
 - [x] **23. Tests automáticos.** Vitest con 43 pruebas: reloj, pozo, bounties, reglas, premios, mesas y plantillas (`pnpm test`).
+
+
+---
+
+## 🃏 Bloque 8: Asistente de manos para jugadores (en curso, rama `feature/asistente-manos`)
+
+**Objetivo:** que cada jugador, desde su celular, pueda consultar qué hacer antes del flop según su posición y sus cartas, en menos de 5 segundos y sin demorar la mesa. Todo con reglas (sin IA), explicado en castellano.
+
+**Decisiones tomadas:**
+- Cada jugador arma su mesa cuando consulta: cantidad de jugadores, su asiento y el dealer (se recuerdan entre usos; "D ➜" corre el dealer un lugar).
+- Versión 1: solo antes del flop.
+- Notas de rivales: privadas en cada celular, nunca se comparten.
+- Uso libre durante el torneo: todos tienen el mismo acceso.
+
+**Etapas:**
+- [x] **24. Cerebro de rangos.** 169 manos, posiciones según cantidad de jugadores (2 a 10), rangos por situación (nadie entró, pagaron, subieron, resubieron, all-in) y por stack (40+, 15–40, menos de 15 BB), recomendación con explicación. 32 tests.
+- [ ] **25. Guía visual.** Cuadrícula 13 × 13 en colores por posición y situación, explicación de cada mano y de las posiciones. Accesible por link, sin torneo.
+- [ ] **26. Asistente de mano.** Mini-mesa (jugadores, tu asiento, dealer), cartas en 1 toque, situación en 1 toque y respuesta grande con el "¿por qué?".
+- [ ] **27. QR de jugadores.** Dos QR (organizador / jugadores), vista de jugador con reloj, ciegas y sus fichas en BB, y permisos validados en la computadora.
+- [ ] **28. Notas privadas de rivales** que ajustan el consejo.
+- [ ] **29. Modo práctica.** Juego de preguntas con puntos y rachas para aprender entre manos.
+
+**Fases futuras:**
+- [ ] **Después del flop:** qué juego tenés en la mesa (pareja, proyectos de color o escalera), cuántas cartas te sirven ("outs"), probabilidad de ligar y si conviene pagar según el tamaño del pozo.
+- [ ] **Que el asistente "aprenda" de las notas:** con cada nota se calculan estadísticas de cada rival (cuánto juega, cuánto sube, cuánto resube, cuánto se tira ante resubidas). Con pocas manos se lo considera promedio y se corrige con más datos, para no etiquetar por una mano rara. Se clasifica el estilo (roca, agresivo, suelto, maníaco) y el consejo se ajusta explicando por qué ("Juan casi nunca sube: tirá AJo"). Todo queda en el celular de cada jugador.
