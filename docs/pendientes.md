@@ -161,7 +161,7 @@ Este archivo registra todas las tareas y mejoras planificadas para el torneo de 
 
 **Etapas:**
 - [x] **24. Cerebro de rangos.** 169 manos, posiciones según cantidad de jugadores (2 a 10), rangos por situación (nadie entró, pagaron, subieron, resubieron, all-in) y por stack (40+, 15–40, menos de 15 BB), recomendación con explicación. 32 tests.
-- [ ] **25. Guía visual.** Cuadrícula 13 × 13 en colores por posición y situación, explicación de cada mano y de las posiciones. Accesible por link, sin torneo.
+- [x] **25. Guía visual.** Cuadrícula 13 × 13 en colores por posición y situación, explicación de cada mano y de las posiciones. Accesible por link, sin torneo.
 - [ ] **26. Asistente de mano.** Mini-mesa (jugadores, tu asiento, dealer), cartas en 1 toque, situación en 1 toque y respuesta grande con el "¿por qué?".
 - [ ] **27. QR de jugadores.** Dos QR (organizador / jugadores), vista de jugador con reloj, ciegas y sus fichas en BB, y permisos validados en la computadora.
 - [ ] **28. Notas privadas de rivales** que ajustan el consejo.

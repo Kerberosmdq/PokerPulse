@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
-import { Play, Trophy, Users, Clock, Trash2, Calendar, Coins, Award, Tv, Smartphone, Shuffle } from 'lucide-react';
+import { Play, Trophy, Users, Clock, Trash2, Calendar, Coins, Award, Tv, Smartphone, Shuffle, Grid3x3 } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
@@ -64,6 +64,9 @@ export const LandingPage: React.FC = () => {
                             Empezar de cero ({pendingPlayers} anotados)
                         </Button>
                     )}
+                    <Button variant="outline" onClick={() => window.open(`${window.location.pathname}?view=guia`, '_blank')} className="rounded-full h-12">
+                        <Grid3x3 className="w-4 h-4" /> Guía de manos
+                    </Button>
                 </motion.div>
 
                 <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">

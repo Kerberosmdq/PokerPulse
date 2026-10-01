@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
     Tv, QrCode, Shuffle, DollarSign, Coffee, Trophy, VolumeX, Volume1, Volume2, Download, Upload,
-    MoreHorizontal, Keyboard, RotateCcw, Settings2, MessageSquare, Check,
+    MoreHorizontal, Keyboard, RotateCcw, Settings2, MessageSquare, Check, Grid3x3,
 } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { toast } from '../../store/toastStore';
@@ -422,6 +422,7 @@ const MoreMenu: React.FC<{ closeMenu: () => void; onOverlay: (o: Overlay) => voi
             <MenuItem icon={<Settings2 className="w-4 h-4" />} onClick={act(() => setGameState('setup'))}>Editar configuración</MenuItem>
             <MenuItem icon={<Download className="w-4 h-4" />} onClick={act(() => { exportTournamentData(useGameStore.getState()); toast.success('Respaldo descargado'); })}>Exportar respaldo</MenuItem>
             <MenuItem icon={<Upload className="w-4 h-4" />} onClick={act(onImport)}>Importar respaldo</MenuItem>
+            <MenuItem icon={<Grid3x3 className="w-4 h-4" />} onClick={act(() => window.open(`${window.location.pathname}?view=guia`, '_blank'))}>Guía de manos</MenuItem>
             <MenuItem icon={<Keyboard className="w-4 h-4" />} hint="?" onClick={act(() => onOverlay('shortcuts'))}>Atajos de teclado</MenuItem>
             <div className="h-px bg-white/5 my-1" />
             <MenuItem icon={<RotateCcw className="w-4 h-4" />} danger onClick={act(() => onOverlay('reset'))}>Descartar torneo</MenuItem>
