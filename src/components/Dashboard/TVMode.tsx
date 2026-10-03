@@ -5,12 +5,13 @@ import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { cn } from '../../utils/cn';
 import {
-    findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber,
+    chipsToColorUp, findNextPlayingLevel, formatChips, formatMoney, formatTime, getLevelNumber,
     getTournamentStats, placeMedal, secondsUntilNextBreak,
 } from '../../utils/tournament';
 import { usePrizes } from '../../hooks/usePrizes';
 import { QRCodeSVG } from 'qrcode.react';
 import { playerLink } from '../../utils/links';
+import { PokerChip } from './ChipList';
 
 /** ID del anfitrión si la conexión de celulares ya se usó en este navegador. */
 const savedHostId = () => {
@@ -59,6 +60,17 @@ const useIdleControls = (delay = 2500) => {
         };
     }, [delay]);
     return visible;
+};
+
+/** Ancho de la ventana, para escalar elementos que se dimensionan en píxeles (las fichas). */
+const useViewportWidth = () => {
+    const [width, setWidth] = useState(() => window.innerWidth);
+    useEffect(() => {
+        const onResize = () => setWidth(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+    return width;
 };
 
 const toggleFullscreen = async () => {
@@ -201,6 +213,38 @@ export const TVDisplay: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            <TVChipStrip />
+        </div>
+    );
+};
+
+/** Franja inferior con las fichas en juego y su valor; las que ya se pueden retirar aparecen atenuadas. */
+const TVChipStrip: React.FC = () => {
+    const chipValues = useGameStore(s => s.chipValues);
+    const blindsStructure = useGameStore(s => s.blindsStructure);
+    const currentLevelIndex = useGameStore(s => s.currentLevelIndex);
+    const vw = useViewportWidth();
+
+    const chips = [...chipValues].filter(c => c.value > 0).sort((a, b) => a.value - b.value);
+    if (chips.length === 0) return null;
+    const obsolete = new Set(chipsToColorUp(chipValues, blindsStructure, currentLevelIndex).map(c => c.value));
+    const size = Math.round(Math.min(96, Math.max(36, vw * (chips.length > 7 ? 0.032 : 0.04))));
+
+    return (
+        <div className="flex flex-wrap items-center justify-center gap-x-[2.5vw] gap-y-[1vw] pt-[1.2vw] border-t border-white/10">
+            {chips.map(chip => {
+                const retire = obsolete.has(chip.value);
+                return (
+                    <div key={`${chip.color}-${chip.value}`} className={cn('flex items-center gap-[0.8vw]', retire && 'opacity-40')}>
+                        <PokerChip color={chip.color} value={chip.value} size={size} />
+                        <div className="leading-none">
+                            <div className="font-black text-white font-mono tabular" style={{ fontSize: 'clamp(1rem, 2.2vw, 3rem)' }}>{formatChips(chip.value)}</div>
+                            {retire && <div className="uppercase tracking-wider text-gray-400 font-bold mt-[0.3vw]" style={{ fontSize: 'clamp(0.6rem, 0.9vw, 1.2rem)' }}>Retirar</div>}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 };
