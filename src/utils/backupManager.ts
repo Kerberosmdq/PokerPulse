@@ -3,7 +3,7 @@ import type { PokerGameStore } from '../types';
 // Campos del torneo que viajan en un respaldo (no incluye preferencias como volumen)
 const BACKUP_FIELDS = [
     'tournamentName', 'buyIn', 'startingStack', 'seatsPerTable',
-    'blindsStructure', 'chipValues', 'players', 'currentLevelIndex', 'timerSecondsRemaining',
+    'blindsStructure', 'chipValues', 'chipLocks', 'players', 'currentLevelIndex', 'timerSecondsRemaining',
     'tournamentStartedAt', 'prizePool', 'payoutStructure', 'customPayouts', 'gameLog',
     'rebuyAmount', 'rebuyChips', 'addonAmount', 'addonChips',
     'rakePercent', 'guaranteedPool', 'bountyAmount', 'rebuyUntilLevel', 'maxRebuys', 'addonUntilLevel', 'maxAddons',

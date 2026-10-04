@@ -16,17 +16,17 @@ export const ChipsConfig: React.FC = () => {
     const chipValues = useGameStore(s => s.chipValues);
     const startingStack = useGameStore(s => s.startingStack);
     const registered = useGameStore(s => s.players.length);
-    const { setChipValues, setTournamentSettings } = useGameStore.getState();
+    // Cantidades que el usuario fijó a mano, por valor de ficha (se guardan para verlas durante el torneo)
+    const locked = useGameStore(s => s.chipLocks);
+    const { setChipValues, setChipLocks: setLocked, setTournamentSettings } = useGameStore.getState();
     const [playersCount, setPlayersCount] = useState(registered || 8);
-    // Cantidades que el usuario fijó a mano, por valor de ficha
-    const [locked, setLocked] = useState<Record<number, number>>({});
 
-    const setCount = (value: number, count: number) => setLocked(prev => ({ ...prev, [value]: Math.max(0, count) }));
-    const unlock = (value: number) => setLocked(prev => {
-        const next = { ...prev };
+    const setCount = (value: number, count: number) => setLocked({ ...locked, [value]: Math.max(0, count) });
+    const unlock = (value: number) => {
+        const next = { ...locked };
         delete next[value];
-        return next;
-    });
+        setLocked(next);
+    };
 
     const update = (index: number, patch: Partial<ChipValue>) =>
         setChipValues(chipValues.map((chip, i) => (i === index ? { ...chip, ...patch } : chip)));

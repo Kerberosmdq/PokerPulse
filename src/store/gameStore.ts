@@ -71,6 +71,7 @@ export const useGameStore = create<PokerGameStore>()(
             players: [],
             blindsStructure: INITIAL_BLINDS,
             chipValues: INITIAL_CHIPS,
+            chipLocks: {},
             currentLevelIndex: 0,
             timerSecondsRemaining: INITIAL_BLINDS[0].duration * 60,
             levelEndTime: null, // timestamp de fin del nivel actual (solo con el reloj corriendo)
@@ -305,6 +306,7 @@ export const useGameStore = create<PokerGameStore>()(
             },
 
             setChipValues: (chips) => set({ chipValues: chips }),
+            setChipLocks: (locks) => set({ chipLocks: locks }),
 
             startTimer: () => {
                 const { isPaused, timerSecondsRemaining, tournamentStartedAt } = get();

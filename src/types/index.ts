@@ -95,6 +95,8 @@ export interface PokerGameStore extends TournamentSettings {
     players: Player[];
     blindsStructure: BlindLevel[];
     chipValues: ChipValue[];
+    /** Cantidades por jugador que el usuario fijó a mano en el reparto, por valor de ficha */
+    chipLocks: Record<number, number>;
     currentLevelIndex: number;
     timerSecondsRemaining: number;
     levelEndTime: number | null;
@@ -131,6 +133,7 @@ export interface PokerGameStore extends TournamentSettings {
     deleteBlindTemplate: (id: string) => void;
     setBlindsStructure: (levels: BlindLevel[]) => void;
     setChipValues: (chips: ChipValue[]) => void;
+    setChipLocks: (locks: Record<number, number>) => void;
     startTimer: () => void;
     pauseTimer: () => void;
     resetTimer: () => void;
