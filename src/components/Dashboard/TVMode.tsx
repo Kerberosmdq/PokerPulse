@@ -9,6 +9,7 @@ import {
     getTournamentStats, placeMedal, secondsUntilNextBreak,
 } from '../../utils/tournament';
 import { usePrizes } from '../../hooks/usePrizes';
+import { useWakeLock } from '../../hooks/useWakeLock';
 import { QRCodeSVG } from 'qrcode.react';
 import { playerLink } from '../../utils/links';
 import { PokerChip } from './ChipList';
@@ -260,6 +261,8 @@ const InfoBlock: React.FC<{ label: string; small?: boolean; children: React.Reac
 /** Modo TV dentro de la app del anfitrión. */
 export const TVMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const controlsVisible = useIdleControls();
+    // La pantalla TV se mira de lejos: que no se apague aunque el reloj esté en pausa
+    useWakeLock();
 
     useEffect(() => {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => { });
@@ -303,6 +306,7 @@ export const TVMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 export const TVWindow: React.FC = () => {
     const gameState = useGameStore(s => s.gameState);
     const controlsVisible = useIdleControls();
+    useWakeLock();
 
     useEffect(() => {
         document.title = 'NexPulse · TV';

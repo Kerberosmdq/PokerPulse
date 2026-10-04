@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
     Tv, QrCode, Shuffle, DollarSign, Coffee, Trophy, VolumeX, Volume1, Volume2, Download, Upload,
-    MoreHorizontal, Keyboard, RotateCcw, Settings2, MessageSquare, Check, Grid3x3,
+    MoreHorizontal, Keyboard, RotateCcw, Settings2, MessageSquare, Check, Grid3x3, Calculator,
 } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { toast } from '../../store/toastStore';
@@ -29,7 +29,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { Modal } from '../ui/Modal';
 import { Dropdown, MenuItem, MenuLabel } from '../ui/Dropdown';
 
-type Overlay = 'remote' | 'tv' | 'seating' | 'prizes' | 'finish' | 'reset' | 'shortcuts' | null;
+type Overlay = 'remote' | 'tv' | 'seating' | 'prizes' | 'chips' | 'finish' | 'reset' | 'shortcuts' | null;
 
 // Pantallas que no hacen falta al abrir el panel: se descargan recién cuando se usan
 // (el control remoto arrastra PeerJS y el generador de QR)
@@ -37,6 +37,7 @@ const RemoteControlQR = lazy(() => import('./RemoteControlQR').then(m => ({ defa
 const TVMode = lazy(() => import('./TVMode').then(m => ({ default: m.TVMode })));
 const SeatingDraw = lazy(() => import('./SeatingDraw').then(m => ({ default: m.SeatingDraw })));
 const PrizePool = lazy(() => import('./PrizePool').then(m => ({ default: m.PrizePool })));
+const ChipDistributionModal = lazy(() => import('./ChipDistributionModal').then(m => ({ default: m.ChipDistributionModal })));
 const BreakOverlay = lazy(() => import('./BreakOverlay').then(m => ({ default: m.BreakOverlay })));
 const FinishTournamentModal = lazy(() => import('./FinishTournamentModal').then(m => ({ default: m.FinishTournamentModal })));
 
@@ -100,6 +101,7 @@ export const Dashboard: React.FC = () => {
                 {overlay === 'remote' && <Suspense key="remote" fallback={null}><RemoteControlQR onClose={close} /></Suspense>}
                 {overlay === 'seating' && <Suspense key="seating" fallback={null}><SeatingDraw onClose={close} /></Suspense>}
                 {overlay === 'prizes' && <Suspense key="prizes" fallback={null}><PrizePool onClose={close} /></Suspense>}
+                {overlay === 'chips' && <Suspense key="chips" fallback={null}><ChipDistributionModal onClose={close} /></Suspense>}
                 {overlay === 'finish' && <Suspense key="finish" fallback={null}><FinishTournamentModal onClose={close} /></Suspense>}
                 {overlay === 'shortcuts' && <ShortcutsHelp key="shortcuts" onClose={close} />}
                 {overlay === 'reset' && (
@@ -205,6 +207,9 @@ export const Dashboard: React.FC = () => {
                         <div className="flex-1 min-w-0">
                             <ChipList />
                         </div>
+                        <Button variant="ghost" size="sm" onClick={() => setOverlay('chips')} className="shrink-0 text-gray-300" title="Ver cuántas fichas de cada valor recibe cada jugador">
+                            <Calculator className="w-4 h-4 text-accent" /> Reparto
+                        </Button>
                         </div>
                     </div>
                 </section>
