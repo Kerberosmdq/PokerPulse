@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { soundManager } from '../utils/audio';
 import { getLevelNumber } from '../utils/tournament';
+import { useWakeLock } from './useWakeLock';
 
 /**
  * Motor del reloj del anfitrión: avanza el tiempo, mantiene la pantalla encendida y dispara
@@ -20,31 +21,8 @@ export const useClockEngine = () => {
         return () => clearInterval(interval);
     }, [isPaused]);
 
-    // Wake Lock: evitar que la pantalla se apague con el reloj corriendo
-    useEffect(() => {
-        if (isPaused || !('wakeLock' in navigator)) return;
-        let lock: WakeLockSentinel | null = null;
-        let cancelled = false;
-
-        const request = () => {
-            navigator.wakeLock.request('screen')
-                .then(l => {
-                    if (cancelled) l.release();
-                    else lock = l;
-                })
-                .catch(() => { /* No disponible o denegado */ });
-        };
-        // El lock se libera solo al ocultar la pestaña; se vuelve a pedir al regresar
-        const onVisibility = () => { if (document.visibilityState === 'visible') request(); };
-
-        request();
-        document.addEventListener('visibilitychange', onVisibility);
-        return () => {
-            cancelled = true;
-            document.removeEventListener('visibilitychange', onVisibility);
-            lock?.release();
-        };
-    }, [isPaused]);
+    // Evitar que la pantalla se apague con el reloj corriendo
+    useWakeLock(!isPaused);
 
     // Sonidos y anuncios por voz ante cambios del reloj
     useEffect(() => {
